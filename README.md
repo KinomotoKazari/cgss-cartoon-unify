@@ -1,6 +1,6 @@
 # cgss-cartoon-unify
 
-`cgss-cartoon-unify` previews CGSS `card_cartoon_*.unity3d` bundles in a browser. We read UnityFS data, resolve the card's Spine and particle assets, decode textures, and render the animation locally. The selected bundle stays in the browser.
+`cgss-cartoon-unify` previews CGSS (シンデレラガールズスターライトステージ / デレステ / Deresute / Cinderella Girls: Starlight Stage) `card_cartoon_*.unity3d` bundles in a browser. We read UnityFS data, resolve the card's Spine and particle assets, decode textures, and render the animation locally. The selected bundle stays in the browser.
 
 The repository has two ready-to-use browser entries:
 
