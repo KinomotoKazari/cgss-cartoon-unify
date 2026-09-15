@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CGSS Emitter Inspector</title><link rel="stylesheet" href="./player.css"></head>
+<body><main class="standalone-shell">
+  <header class="topbar"><nav class="page-nav" aria-label="Pages"><a href="./index.html">Card preview</a><a class="active" href="./emitter_debug.html">Emitter inspector</a></nav></header>
+  <section class="hero"><div><h1>Inspect Emitter Info</h1><p>Choose a card_cartoon_*.unity3d file to process</p></div></section>
+  <section class="load-surface"><form class="cgss-cartoon-player__form" id="load-form"><label class="cgss-cartoon-player__choose">＋ <span>Choose bundle</span><input id="bundle" type="file" accept=".unity3d" required></label><span class="cgss-cartoon-player__filename" id="filename">No file selected</span><button id="load" class="primary-action" type="submit">Inspect emitters</button><button id="cancel" class="quiet-action" type="button" hidden>Cancel</button></form><p class="cgss-cartoon-player__status" id="status" role="status"></p></section>
+  <section class="debug-layout cgss-cartoon-player__preview" id="preview" hidden><header class="player-header cgss-cartoon-player__header"><div><p class="eyebrow">STATIC REFERENCE FRAME</p><h2 id="card-title"></h2></div></header><div class="cgss-cartoon-player__viewport" id="viewport"><canvas id="cv" width="1400" height="1400"></canvas></div><aside id="particle-inspector"></aside></section>
+</main><script src="./runtime/spine-core.js"></script><script src="./runtime/spine-canvas.js"></script><script src="./runtime/spine-webgl.js"></script><script src="./runtime/cgss_skel_parser.js"></script><script src="./particle-overlay.js"></script><script type="module" src="./emitter-debug.js"></script></body>
+</html>

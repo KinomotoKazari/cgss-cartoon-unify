@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CGSS Cartoon</title><link rel="stylesheet" href="/web/style.css"></head>
+<body class="card-page"><main class="app-shell">
+  <header class="topbar"><nav class="page-nav" aria-label="Pages"><a class="active" href="/">Card preview</a><a href="/emitter_debug.html">Emitter inspector</a></nav></header>
+  <section class="hero"><div><h1>Card Animation Preview</h1><p>Choose a card_cartoon_*.unity3d file to view card cartoon</p></div></section>
+  <section class="load-surface"><form id="load-form"><label class="choose">＋ <span>Choose bundle</span><input id="bundle" type="file" accept=".unity3d" required></label><span id="filename">No file selected</span><button id="load" class="primary-action" type="submit">Load card</button><button id="cancel" class="quiet-action" type="button" hidden>Cancel</button></form><p id="status" role="status"></p></section>
+  <section id="preview" class="player-card" hidden><header class="player-header"><div><p class="eyebrow">NOW PLAYING</p><h2 id="card-title"></h2></div><div class="controls"><button id="play" class="icon-action" type="button">Play</button><button id="pause" class="icon-action" type="button">Pause</button><label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="3" step="0.1" value="1"></label></div></header><div id="viewport"><canvas id="cv" width="1400" height="1400"></canvas></div></section>
+</main><script src="/runtime/spine-core.js"></script><script src="/runtime/spine-canvas.js"></script><script src="/runtime/spine-webgl.js"></script><script src="/runtime/cgss_skel_parser.js"></script><script src="/web/particle-overlay.js"></script><script type="module" src="/web/app.js"></script></body>
+</html>

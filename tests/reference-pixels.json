@@ -1,0 +1,11 @@
+{
+  "peff_cartoon_anime_eff1_201389_tex_dust01": {"width":32,"height":32,"sha256":"a4e664d43147886770b1a506db6330d63845483878fea1131e47e71aac07a698"},
+  "peff_cartoon_anime_eff1_201389_tex_dust02": {"width":128,"height":128,"sha256":"66254afa631748fba211a8e4f1ee07f0b78bb069e63935efe97a873845a52bf1"},
+  "peff_cartoon_anime_eff1_201389_tex_dust03": {"width":64,"height":64,"sha256":"a59f4d45445f6952d3523803639115282e215ea3602b23562f5a4bd148838853"},
+  "peff_cartoon_anime_eff1_201389_tex_dust04": {"width":64,"height":64,"sha256":"e813651779f1b6b0ecbd6994903675cadbe8f969c738704815602a3ab65147a5"},
+  "peff_cartoon_anime_eff1_201389_tex_dust05": {"width":64,"height":64,"sha256":"e988b26385d9eff847b3f38c62314d2bab62b14f18294fc101319c3960a5007b"},
+  "SP3S201389_tex": {"width":2043,"height":1024,"sha256":"4b2983c2f02969896c778bd27503238f42635fdba76e17fe0d076022c3ed610b"},
+  "SP3S201389_tex_A8": {"width":2043,"height":1024,"sha256":"d9064f9a3ed15c583765ce7b520d4904f18473286461e2c78dec8b9bf5ef687e"},
+  "SP3S300599_tex": {"width":2016,"height":879,"sha256":"fca92b6669727dc18195d83cb226171faba96ac7270cd408c7e436835eb4c724"},
+  "SP3S300599_tex_A8": {"width":2016,"height":879,"sha256":"91a940cc19832e9f23b236c4fc25934c4d2bad9a36afafc103a8e6372e4f6815"}
+}

@@ -1,0 +1,27 @@
+# Third-party notices
+
+## AssetStudio
+
+We used [AssetStudio](https://github.com/Perfare/AssetStudio) as the reference for the UnityFS, SerializedFile, TypeTree, and shared-string handling. `src/common-strings.js` adapts its shared string table. AssetStudio is MIT licensed. Its text is in [licenses/AssetStudio-MIT.txt](licenses/AssetStudio-MIT.txt). We do not distribute or load AssetStudio binaries.
+
+## CGSS Resource Tool
+
+We are very grateful to [BA-Momoi's CGSS Resource Tool](https://github.com/BA-Momoi/cgss-resource-tool) and its spine_preview for the reference work behind this project's card layer order, RGB/A8 atlas composition, coordinate conversion, scene fitting, and Spine blend-mode handling. The project is available under the MIT License. Its notice is included in [licenses/CGSS-Resource-Tool-MIT.txt](licenses/CGSS-Resource-Tool-MIT.txt).
+
+No CGSS Resource Tool application files are bundled as a runtime dependency.
+
+## MDUI
+
+We are very thankful to [MDUI](https://www.mdui.org/) for its Material Design direction, which inspired the local interface. No MDUI source or package files are bundled. MDUI is available under the MIT License. Its notice is included in [licenses/MDUI-MIT.txt](licenses/MDUI-MIT.txt).
+
+## Spine Runtimes and CGSS preview code
+
+`runtime/spine-core.js` and `runtime/spine-canvas.js` come from Spine Runtimes 3.6 by Esoteric Software. The Spine Runtimes Software License v2.5 is in [licenses/Spine-3.6.txt](licenses/Spine-3.6.txt). We retain that license with the runtime files.
+
+`runtime/spine-webgl.js` and `runtime/cgss_skel_parser.js` started from the existing CGSS preview source supplied with this work. We made local resource-management and texture-cache changes to the renderer and simplified comments in the parser. No separate upstream license notice was supplied for these two files.
+
+The same notices apply to the synchronized copies under `web-cartoon-player/runtime/` and `web-cartoon-player/src/`. When redistributing the standalone folder, include this notice and the files in `licenses/`. [licenses/README.md](licenses/README.md) explains the mapping.
+
+## Reference fixtures
+
+No game bundles, textures, or skeletons are included. Tests store only reference texture dimensions and RGBA SHA-256 hashes obtained from AssetStudio exports. Supply your own bundle files to run integration checks.

@@ -1,0 +1,347 @@
+:root {
+  color-scheme:dark;
+  font-family:Inter,"Segoe UI",system-ui,sans-serif;
+  background:#111015;
+  color:#eee8f6;
+  --surface:#201d25;
+  --line:#393240;
+  --muted:#b2a9be;
+  --accent:#d0bcff;
+  --accent-ink:#33234c;
+}
+* {
+  box-sizing:border-box;
+}
+body {
+  margin:0;
+  background:radial-gradient(circle at 80% -20%,#3d2e50 0,transparent 30%),#111015;
+}
+button,input {
+  font:inherit;
+}
+button {
+  cursor:pointer;
+}
+button:focus-visible,input:focus-visible,a:focus-visible {
+  outline:3px solid var(--accent);
+  outline-offset:3px;
+}
+.app-shell {
+  max-width:1500px;
+  margin:auto;
+  padding:28px 40px 22px;
+}
+.topbar {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:20px;
+}
+.eyebrow {
+  font-size:10px;
+  letter-spacing:1.7px;
+  color:#b5a5c8;
+}
+.page-nav {
+  display:flex;
+  gap:5px;
+  padding:5px;
+  border-radius:28px;
+  background:#211c27;
+}
+.page-nav a {
+  padding:10px 16px;
+  border-radius:22px;
+  color:#c8bfce;
+  text-decoration:none;
+  font-size:13px;
+}
+.page-nav a.active {
+  background:#4a395a;
+  color:#f5ebff;
+}
+.hero {
+  padding:52px 0 25px;
+}
+.hero h1 {
+  font-size:38px;
+  line-height:1.05;
+  letter-spacing:-1.4px;
+  font-weight:500;
+  margin:7px 0 12px;
+}
+.hero p:not(.eyebrow) {
+  color:var(--muted);
+  margin:0;
+  font-size:15px;
+}
+.load-surface {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  padding:15px 19px;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:#1d1921;
+  margin-bottom:22px;
+}
+.load-surface form,.controls {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.choose {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  overflow:hidden;
+  border-radius:24px;
+  padding:12px 18px;
+  background:var(--accent);
+  color:var(--accent-ink);
+  font-weight:650;
+  font-size:13px;
+  cursor:pointer;
+}
+.choose input {
+  position:absolute;
+  inset:0;
+  opacity:0;
+  cursor:pointer;
+}
+.primary-action,.icon-action {
+  border:0;
+  border-radius:22px;
+  padding:11px 16px;
+  background:#49395b;
+  color:#f6efff;
+  font-size:13px;
+}
+.quiet-action {
+  border:1px solid #5a4d66;
+  border-radius:22px;
+  padding:10px 16px;
+  background:transparent;
+  color:#d7cde1;
+}
+.primary-action:disabled,.quiet-action:disabled,.icon-action:disabled {
+  opacity:.5;
+  cursor:default;
+}
+#filename {
+  max-width:260px;
+  overflow-wrap:anywhere;
+  color:#d8cfdf;
+  font-size:13px;
+}
+#status {
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+  text-align:right;
+}
+.player-card,.debug-layout {
+  border:1px solid var(--line);
+  border-radius:24px;
+  background:var(--surface);
+  overflow:hidden;
+}
+.player-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  padding:20px 23px;
+}
+.player-header h2 {
+  font-size:20px;
+  font-weight:500;
+  margin:5px 0 0;
+}
+.speed-control {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  color:#cbc1d5;
+  font-size:12px;
+}
+.speed-control input {
+  accent-color:var(--accent);
+  width:110px;
+}
+#viewport {
+  position:relative;
+  background:#17151a;
+  overflow:hidden;
+}
+canvas {
+  display:block;
+  width:100%;
+  height:auto;
+}
+.player-card #viewport {
+  max-height:78vh;
+}
+.particle-inspector__overlay {
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+.particle-inspector__marker {
+  cursor:pointer;
+}
+.particle-inspector__marker:hover circle {
+  stroke:#fff;
+  stroke-width:4;
+}
+.particle-inspector__marker text {
+  fill:#fff;
+  font-size:14px;
+  paint-order:stroke;
+  stroke:#111;
+  stroke-width:3px;
+  pointer-events:none;
+}
+.particle-inspector__marker polygon {
+  fill-opacity:.08;
+  stroke-dasharray:5 4;
+  stroke-width:1.5;
+  pointer-events:none;
+}
+.debug-layout {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 340px;
+  align-items:start;
+}
+.debug-layout .player-header {
+  grid-column:1/-1;
+}
+.debug-layout aside {
+  min-height:100%;
+  padding:18px;
+  background:#211c27;
+  border-left:1px solid var(--line);
+}
+.particle-inspector {
+  padding:0;
+}
+.particle-inspector__note {
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.6;
+  margin:0 0 17px;
+}
+.particle-inspector__filters {
+  display:flex;
+  gap:7px;
+  margin:0 0 17px;
+  flex-wrap:wrap;
+}
+.particle-inspector__filters label {
+  border-radius:16px;
+  background:#372d42;
+  color:#d5c4e5;
+  padding:8px 10px;
+  font-size:11px;
+}
+.particle-inspector__layout {
+  display:grid;
+  gap:14px;
+}
+.particle-inspector select {
+  width:100%;
+  border:1px solid #564864;
+  border-radius:13px;
+  background:#352c3e;
+  color:#eee6f4;
+  padding:11px;
+}
+.particle-inspector__layout>div {
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+}
+.particle-inspector__thumbnail {
+  width:88px;
+  height:88px;
+  flex:0 0 88px;
+  border-radius:50%;
+  background:#08070a;
+}
+.particle-inspector__details {
+  margin:0;
+  display:grid;
+  gap:7px;
+  min-width:0;
+}
+.particle-inspector__details div {
+  display:grid;
+  gap:4px;
+}
+.particle-inspector__details dt {
+  color:#aa9ab9;
+  font-size:10px;
+}
+.particle-inspector__details dd {
+  margin:0;
+  color:#eee6f5;
+  font-size:11px;
+  overflow-wrap:anywhere;
+}
+footer {
+  display:flex;
+  justify-content:space-between;
+  color:#877d91;
+  font-size:11px;
+  padding:18px 2px;
+}
+[hidden] {
+  display:none!important;
+}
+@media(max-width:900px) {
+  .app-shell {
+    padding:20px;
+  }
+  .topbar {
+    align-items:flex-start;
+  }
+  .page-nav a {
+    padding:9px 11px;
+    font-size:11px;
+  }
+  .hero {
+    padding:35px 0 20px;
+  }
+  .hero h1 {
+    font-size:30px;
+  }
+  .load-surface {
+    display:block;
+  }
+  .load-surface form {
+    margin-bottom:12px;
+  }
+  .load-surface #status {
+    text-align:left;
+  }
+  .debug-layout {
+    grid-template-columns:1fr;
+  }
+  .debug-layout aside {
+    border-left:0;
+    border-top:1px solid var(--line);
+  }
+  .player-header {
+    padding:17px;
+  }
+  .controls {
+    gap:7px;
+  }
+  .speed-control input {
+    width:75px;
+  }
+}
