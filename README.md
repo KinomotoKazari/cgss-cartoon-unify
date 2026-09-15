@@ -47,6 +47,16 @@ The markers show authored emitter centres. The shaded outlines show projected Sh
 
 ## Quick start
 
+### Online preview
+
+The standalone player is published through GitHub Pages:
+
+https://kinomotokazari.github.io/cgss-cartoon-unify/
+
+Choose a `card_cartoon_*.unity3d` file and click **Load card** to preview it. The bundle is processed locally by your browser and is not uploaded to a server.
+
+The hosted [emitter inspector](https://kinomotokazari.github.io/cgss-cartoon-unify/emitter_debug.html) and [bare player](https://kinomotokazari.github.io/cgss-cartoon-unify/player.html) are also available directly.
+
 ### Desktop preview
 
 Requirements: Python 3.10+ and a current browser with WebGL. No packages need to be installed.
