@@ -44,9 +44,9 @@ Playback treats a `ParticleSystem` as an emitter when its GameObject is active, 
 | `InitialModule.maxNumParticles` | Upper bound for the generated particle count. |
 | `EmissionModule.rateOverTime` | Calculates a steady-state count near `rate × average lifetime`. |
 | `ShapeModule.m_Position` and `m_Scale` | Uniform starting position in the module's local rectangular bounds. |
-| `VelocityModule.x/y` | Linear movement over the particle age when that module is enabled. |
+| `VelocityModule.x/y` | Integrates constant or Hermite curve velocity over particle age. |
 | `ColorModule.gradient.maxGradient` | Alpha-gradient interpolation across normalized lifetime. |
-| `UVModule.tilesX/tilesY` | Selects a stable cell from a texture-sheet grid when enabled. |
+| `UVModule` | Samples start frame and frame-over-time across the whole texture sheet. |
 | `simulationSpeed`, `prewarm`, `lengthInSec` | Advances time, including a prewarm offset. |
 | GameObject Transform chain | Applies local scale, Z rotation, position, and ancestors before conversion to canvas space. |
 
@@ -62,7 +62,7 @@ count   = min(maxNumParticles || Infinity,
 
 This count is a preview estimate, not a simulation of emission events. Its minimum of one means even a zero-rate eligible emitter can produce a particle. A zero particle limit is treated as unbounded. These are current approximation limits.
 
-For every frame, age wraps by its chosen lifetime. The browser adds a visual fade independent of the Unity asset data:
+For every frame, age wraps by its chosen lifetime. For additive effects, the browser adds a visual fade independent of the Unity asset data:
 
 ```text
 fadeIn(age)  = smoothstep(0.00, 0.18, age)
@@ -73,7 +73,9 @@ opacity      = startAlpha × materialAlpha × colorGradientAlpha
 
 Here `age` is normalized lifetime, and final opacity is clamped to [0, 1]. Fade thresholds, highlight gain, and texture contrast are grouped in the `appearance` settings in `web/particle-overlay.js`. They are preview tuning, not values recovered from a Unity material.
 
-Before drawing, each distinct particle texture is copied once per viewer to a shared offscreen canvas and each RGB channel is transformed as `min(255, 4 × channel² / 255)`. Black remains black. Bright edge pixels become substantially brighter. The result is drawn with the Canvas 2D `lighter` composite operation, which approximates an additive glow and gives bubbles brighter rims with a more transparent centre when their source texture and alpha support it.
+Before drawing, particle images are prepared once per emitter. Additive materials transform each RGB channel as `min(255, 4 × channel² / 255)` and use Canvas 2D `lighter`. Black remains black and bright edge pixels become brighter. Materials with `_BlendDst = 10` use source-over compositing and their authored alpha without bubble contrast or extra fades. A referenced `_AlphaTex` supplies the mask from red, or from A for decoded Alpha8 textures.
+
+The feather correction adds initial rotation, integrated rotation-over-lifetime, particle size scaling, and rotated shape bounds. Curve calculations live in `web/particle-math.js`. Weighted tangents, full 3D motion, exact emission scheduling and all Unity texture animation modes remain unsupported. See [Feather analysis](feather-analysis.md) for card 100612, the original failure, and verification results.
 
 ### Reference-card findings
 
@@ -83,7 +85,7 @@ Its point emitters use a `2 × 2` texture sheet, while the circular emitters use
 
 ## Particle order and limits
 
-All Spine layers are rendered first, then all particles are composited on the final 2D canvas. Emitters follow the discovered prefab-node order. This preserves the card's five Spine layers but does **not** reproduce Unity's per-renderer sorting layer, sorting order, render queue, depth buffer, or per-particle sorting. Therefore an effect that should pass behind a character can appear in front in the current preview.
+All Spine layers are rendered first, then all particles are composited on the final 2D canvas. Emitters are sorted by their serialized sorting-layer index and signed sorting order, with discovery order as a stable tie-breaker. Sorting-layer IDs are not interpreted as numeric priorities. This corrects ordering between particle renderers, but does **not** establish their order relative to Spine. Render queues, depth buffers, game-side order overrides and per-particle sorting are still unsupported. An effect that should pass behind a character can therefore still appear in front.
 
 The following Unity particle features are not implemented or are only partially represented:
 

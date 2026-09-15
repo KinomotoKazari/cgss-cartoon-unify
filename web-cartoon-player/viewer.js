@@ -62,7 +62,7 @@ export async function createViewer(card, canvas, getSpeed = () => 1) {
       return {layer:entry.layer, skeleton, state};
     });
     const fit = fitScene(skeletons, canvas);
-    particles = await CGSSParticleOverlay.create({plan:card.plan, config:{particleImages:images}, canvas, fit});
+    particles = await CGSSParticleOverlay.create({plan:card.plan, config:{particleImages:images, textureFormats:Object.fromEntries(card.textures.map(t=>[t.id,t.format]))}, canvas, fit});
     glCanvas = document.createElement('canvas'); glCanvas.width = canvas.width; glCanvas.height = canvas.height;
     renderer = new CGSSWebGLRenderer(glCanvas, {preserveDrawingBuffer:true});
     const context = canvas.getContext('2d');
