@@ -97,6 +97,13 @@ export function loadCard(bytes, progress = () => {}) {
       progress(`Decoding ${data.m_Name}…`);
       textures.push(decodeTexture(resolver, object));
     }
+    if (object.type === 'Shader') {
+      // Keep render states without transferring compiled GPU programs.
+      const parsed = resolver.data(object).m_ParsedForm;
+      objects[object.key] = {pathId:object.pathId, type:object.type, name:parsed.m_Name,
+        data:{states:parsed.m_SubShaders.flatMap(sub=>sub.m_Passes.map(pass=>pass.m_State))}};
+      continue;
+    }
     objects[object.key] = {pathId:object.pathId, type:object.type, name:object.name || '', file:object.file};
     if (object.data && !['TextAsset','Texture2D'].includes(object.type)) objects[object.key].data = planData(resolver, object, object.data);
   }

@@ -149,7 +149,10 @@ We developed against two representative cards. **201389 — 佐城雪美「あ�
 | `src/loader-worker.js` | Read a file or URL, enforce the input limit, then transfer the parsed card |
 | `web/load-session.js` | Own the active load and viewer, then discard cancelled results |
 | `web/viewer.js` | Assemble renderers, advance frames, and release resources |
-| `web/particle-overlay.js` | Approximate particle playback and preview appearance |
+| `web/particle-overlay.js` | Resolve materials and composite particle sprites |
+| `web/particle-motion.js` | Sample emitter shapes and integrate force/velocity |
+| `web/particle-color.js` | Evaluate gradients and particle fragment colors |
+| `web/particle-simulation.js` | Schedule births, deaths, prewarm and fixed ticks |
 | `web/particle-inspector.js` | Show authored emitter positions, source volumes, and diagnostic fields |
 | `web/preview-page.js`, `web/embed-player.js` | Bind the static page controls |
 | `web-cartoon-player/player.js` | Build the standalone player UI |
@@ -157,7 +160,7 @@ We developed against two representative cards. **201389 — 佐城雪美「あ�
 
 ## Remaining limits
 
-Particle playback is an approximation, not a complete Unity particle or shader implementation. We sample a subset of modules, composite particles after Spine, and use preview-specific fades and contrast. The player now keeps per-particle birth/death state, authored seeds, prewarm, size-over-lifetime, gravity modifiers and deterministic browser-side noise, but Unity's exact random/noise kernels, full 3D particle motion, scene sorting and shader equivalence still need separate rendering work and visual reference data.
+Particle playback is an approximation, not a complete Unity implementation. We now evaluate authored RGB/alpha gradients, the two audited particle shader equations, Box and cone-base emission, and fixed-step force/velocity motion. Birth/death timing, seeds, prewarm, size curves and gravity remain supported. Particles still composite after Spine. Unity's exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting and full 3D billboards remain unresolved. See [Rendering analysis](docs/rendering.md) for the supported parameters and limits.
 
 The CGSS skeleton parser supports the custom binary header used by the tested cards. Other skeleton formats and exhaustive malformed-input handling need separate parser work. The current tests do not prove support for every CGSS asset.
 
@@ -167,7 +170,7 @@ The standalone folder contains committed copies so it can be hosted on its own. 
 
 We check parser failures, cancellation during viewer construction, error recovery, both reference cards and their RGBA hashes, and both browser distributions. Browser checks cover card swapping, pause, the static emitter reference frame, visible diagnostic fields, and the bare player entry.
 
-The current run passed 20 local tests with the two optional reference-bundle tests skipped. Particle simulation has dedicated tests for zero-rate emitters, authored seeds, fixed time steps, prewarm, capacity, noise and gravity integration. Browser smoke checks passed with 100612, 201389 and 300599 in both distributions. [Validation](docs/validation.md) records the commands, reference data, and test scope.
+Local tests cover cone distribution, force integration, frame-independent random force, quaternion transforms, gradient modes and shader saturation, alongside the existing parser and simulation checks. Both browser smoke suites passed with 100263, 100612, 201389 and 300599. The two optional reference-hash tests were skipped in this run. [Validation](docs/validation.md) records the commands, reference data, and test scope.
 
 ## Development checks
 

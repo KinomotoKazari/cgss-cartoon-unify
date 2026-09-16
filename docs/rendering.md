@@ -2,6 +2,10 @@
 
 This document describes the renderer that is in this repository. It distinguishes data that comes directly from a Unity bundle from browser-side behaviour that approximates Unity. The desktop preview and `web-cartoon-player/` use the same rendering model.
 
+The [complete 100612 audit](100612-bundle-audit.md) checks every source object against the supplied exports. Its RGB gradients, shader doubling/saturation and total-speed corrections are now implemented. Particle depth sorting remains unresolved.
+
+The [100263 leaf audit](100263-bundle-audit.md) led to cone-base emission, randomized ForceModule acceleration and initial RandomColor support. Noise-driven size/rotation remain unsupported. It also shows why stale material properties and filename-based texture matching are unreliable.
+
 ## Rendering path
 
 ```mermaid
@@ -30,7 +34,7 @@ ParticleSystemRenderer.m_Materials[0]
   → Texture2D
 ```
 
-The material `_Color` is retained and multiplied into the particle alpha. A missing texture referenced by an active emitter is an explicit load error. We do not silently substitute a bubble image.
+The material `_Color` is retained and multiplied into particle RGBA. A missing texture referenced by an active emitter is an explicit load error. We do not silently substitute a bubble image.
 
 ## Particle simulation
 
@@ -40,35 +44,36 @@ Playback treats a `ParticleSystem` as an emitter when its GameObject is active, 
 |---|---|
 | `InitialModule.startLifetime` | Particle lifetime. A scalar or the scalar/min-scalar random range is selected deterministically. |
 | `InitialModule.startSize` | Draw size in scene units, then transformed by the Spine scene fit. |
-| `InitialModule.startColor` | Initial alpha source. The current implementation uses `maxColor` rather than a full colour-gradient evaluation. |
+| `InitialModule.startColor` | Color, Gradient, TwoColors, TwoGradients and RandomColor, including independent RGB/alpha key counts. |
 | `InitialModule.maxNumParticles` | Upper bound for the generated particle count. |
 | `EmissionModule.rateOverTime` | Schedules continuous births on a fixed simulation clock. |
-| `ShapeModule.m_Position` and `m_Scale` | Uniform starting position in the module's local rectangular bounds. |
-| `VelocityModule.x/y` | Integrates constant or Hermite curve velocity over particle age. |
-| `ColorModule.gradient.maxGradient` | Alpha-gradient interpolation across normalized lifetime. |
+| `ShapeModule.m_Position` and `m_Scale` | Box volume or cone base disk, followed by shape scale, rotation and translation. |
+| `VelocityModule.x/y/z` | Combines module velocity with initial velocity and accumulated force before applying speedModifier. |
+| `ColorModule.gradient` | RGB and alpha evaluation across normalized lifetime, with a stable per-particle random weight. |
+| `ForceModule` | Integrates local/world acceleration at 60 Hz, with per-tick randomization when requested. |
 | `UVModule` | Samples start frame and frame-over-time across the whole texture sheet. |
 | `NoiseModule` | Adds a deterministic browser-side value-noise offset from the serialized module settings. |
 | `SizeModule` | Scales particle width and height over normalized lifetime. |
 | `InitialModule.gravityModifier` | Multiplies a configurable gravity vector. The default is `{x: 0, y: -9.81}`. |
 | `simulationSpeed`, `prewarm`, `lengthInSec` | Advances the emitter clock, including a simulated prewarm loop. |
-| GameObject Transform chain | Applies local scale, Z rotation, position, and ancestors before conversion to canvas space. |
+| GameObject Transform chain | Applies local scale, quaternion rotation, position, and ancestors before conversion to canvas space. |
 
 Particles are procedural rather than stored frame by frame. `web/particle-simulation.js` advances each emitter at 60 Hz, accumulates `rateOverTime`, creates particles when the emission credit crosses a birth boundary, and removes each particle after its own lifetime. `autoRandomSeed = false` uses the serialized `randomSeed`; automatic seeds use a browser-generated seed for that load. Prewarm simulates one authored loop before the emitter becomes visible.
 
-For additive effects, the browser adds a visual fade independent of the Unity asset data:
+### Color and material output
 
-```text
-fadeIn(age)  = smoothstep(0.00, 0.18, age)
-fadeOut(age) = 1 - smoothstep(0.70, 1.00, age)
-opacity      = startAlpha × materialAlpha × colorGradientAlpha
-             × fadeIn × fadeOut × 1.6
-```
+We evaluate authored start color, lifetime color and material color together. Only active gradient keys are read. Fixed gradients keep their steps, and TwoGradients use one random blend weight throughout a particle's lifetime.
 
-Here `age` is normalized lifetime, and final opacity is clamped to [0, 1]. Fade thresholds, highlight gain, and texture contrast are grouped in the `appearance` settings in `web/particle-overlay.js`. They are preview tuning, not values recovered from a Unity material.
+The loader retains shader names from `m_ParsedForm.m_Name` and pass states even when the top-level name is empty. Playback resolves the pass's blend-property bindings. Unused saved properties such as `_SrcBlend` do not override `_BlendSrc` when the shader binds the latter.
 
-Before drawing, particle images are prepared once per emitter. Additive materials transform each RGB channel as `min(255, 4 × channel² / 255)` and use Canvas 2D `lighter`. Black remains black and bright edge pixels become brighter. Materials with `_BlendDst = 10` use source-over compositing and their authored alpha without bubble contrast or extra fades. A referenced `_AlphaTex` supplies the mask from red, or from A for decoded Alpha8 textures.
+The two supported particle equations are:
 
-The feather correction adds initial rotation, integrated rotation-over-lifetime, particle size scaling, rotated shape bounds, authored seeds, continuous emission, prewarm, gravity modifiers and noise offsets. Curve calculations live in `web/particle-math.js`, and emitter birth/death state lives in `web/particle-simulation.js`. Weighted tangents, full 3D motion, Unity's exact noise kernel and all Unity texture animation modes remain unsupported. See [Feather analysis](feather-analysis.md) for card 100612, the original failure, and verification results.
+- `CommonParticle/Standard/Blend`: clamp `2 × textureRGBA × particleRGBA × materialRGBA` to [0, 1].
+- `CommonParticle/TexAlpha/Simple/Blend`: multiply texture RGB and its referenced alpha mask by particle and material RGBA.
+
+An Alpha8 texture supplies A, while a color mask supplies red. RGBA is shaded before Canvas applies SrcAlpha/One (`lighter`) or SrcAlpha/OneMinusSrcAlpha (`source-over`). Other shader/blend combinations report an unsupported-state error. This replaces the earlier RGB squaring, highlight gain and generic fade envelope. Fades now come from authored colors and curves.
+
+`particle-motion.js` owns shape sampling and accumulated force. `particle-color.js` owns gradient evaluation and fragment color calculations. `particle-simulation.js` owns birth/death scheduling and fixed ticks, including prewarm. Noise remains a deterministic browser approximation affecting position only. We do not yet reproduce Unity's rotation/size noise, random kernel, camera or full 3D billboard behaviour.
 
 ### Reference-card findings
 
@@ -83,10 +88,10 @@ All Spine layers are rendered first, then all particles are composited on the fi
 The following Unity particle features are not implemented or are only partially represented:
 
 - Burst emission, rate-over-distance, duration/loop stop semantics, and explicit simulation space.
-- Shape geometry beyond the current rectangular position/scale sampling.
-- Trails, collision, sub-emitters, force fields, and custom vertex streams.
+- Shapes other than Box and random cone-base emission, plus non-random cone arc modes.
+- Trails, collision, sub-emitters, external force fields, and custom vertex streams.
 - Limit velocity, inherit velocity, external forces, lights, and custom simulation jobs.
-- Full `MinMaxCurve` evaluation, random colours, colour RGB gradients, and material-specific particle shader properties.
+- Weighted curve tangents, noise-driven rotation/size, and particle shaders beyond the two supported equations.
 - Unity renderer sorting, soft particles, depth fading, fog, bloom, and post-processing.
 
 These omissions are deliberate boundaries of the browser preview. A closer Unity reproduction would need a broader Shuriken simulation and a particle shader pipeline rather than further brightness constants.

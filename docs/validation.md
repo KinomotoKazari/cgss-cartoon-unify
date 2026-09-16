@@ -64,3 +64,9 @@ node tests/compare-reference.mjs /path/to/card.unity3d /path/to/prepared-referen
 ```
 
 The reference directory must contain `scene/objects.json`, per-object JSON files, and `assets/TextAsset/` from the earlier extraction flow. Reference exports and game files are not included in this repository.
+
+## Authored particle fixes
+
+The implementation following the 100612 and 100263 audits adds six focused tests: cone-base area distribution and direction, acceleration with total velocity scaling, frame-independent per-tick force with prewarm, quaternion depth preservation, active gradient keys/modes, and shader RGBA saturation. These passed, as did the existing local tests. Two optional reference-hash tests were skipped.
+
+Both browser suites passed for 100263 (3 visible emitters), 100612 (8), 201389 (21), and 300599 (0). Screenshots for the leaf and feather cards were inspected. This verifies loading, visible particles and playback controls, not official trajectory, camera or occlusion equivalence. Raw bundles and generated screenshots remain in ignored local output.

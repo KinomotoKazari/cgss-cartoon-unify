@@ -9,8 +9,9 @@ export function randomSequence(seed) {
 
 // Fixed simulation ticks keep birth scheduling independent of the browser frame rate.
 export class ParticleSimulation {
-  constructor(system, automaticSeed = 1) {
+  constructor(system, automaticSeed = 1, hooks = {}) {
     this.system = system;
+    this.hooks = hooks;
     this.seed = system.autoRandomSeed ? automaticSeed : system.randomSeed;
     this.reset();
   }
@@ -32,7 +33,9 @@ export class ParticleSimulation {
     if (this.particles.length >= (initial.maxNumParticles ?? 1000)) return;
     const lifetime = sample(initial.startLifetime, this.random(), phase);
     if (!(lifetime > 0)) return;
-    this.particles.push({birth, lifetime, phase, seed: Math.floor(this.random() * 4294967296)});
+    const particle = {birth, lifetime, phase, seed: Math.floor(this.random() * 4294967296)};
+    this.hooks.initialize?.(particle);
+    this.particles.push(particle);
   }
 
   advance(delta, prewarm = false) {
@@ -56,6 +59,11 @@ export class ParticleSimulation {
         const births = Math.floor(this.credit + EPSILON);
         for (let i = 0; i < births; i++) this.spawn(start + (1 - previous + i) / rate, phase);
         this.credit = Math.max(0, this.credit - births);
+      }
+      for (const particle of this.particles) {
+        const until = Math.min(end,particle.birth+particle.lifetime);
+        const delta = until-Math.max(start,particle.birth);
+        if (delta > 0) this.hooks.step?.(particle,delta,until-particle.birth);
       }
       this.time = end;
       this.particles = this.particles.filter(p => p.birth + p.lifetime > this.time + EPSILON);
