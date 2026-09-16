@@ -21,7 +21,7 @@ The desktop check also submits a malformed file and checks that loading becomes 
 
 These checks verify the bundle-loading and Spine-rendering path. Particle rendering remains an approximation of Unity's particle system, so it is not asserted to be pixel-identical.
 
-Parser tests also cover malformed LZ4 input, unsupported formats, missing TypeTrees, binary bounds including invalid reader positions, 64-bit IDs, row flipping, cross-file PPtr resolution, and rejection of partial decode caches. Load-session tests cover cancellation during asynchronous viewer construction and recovery after a Worker error. RGB24 and RGBA32 have synthetic tests only because they were not present in the two reference bundles. Input and allocation sizes are bounded. Those limits do not imply support for every file below them.
+Parser tests also cover malformed LZ4 input, unsupported formats, missing TypeTrees, binary bounds including invalid reader positions, 64-bit IDs, row flipping, cross-file PPtr resolution, and rejection of partial decode caches. Load-session tests cover cancellation during asynchronous viewer construction and recovery after a Worker error. Particle math tests cover renderer ordering, signed velocity integration, curve modes and scale modes. Particle simulation tests cover zero-rate emitters, authored seeds, fixed time steps, prewarm, capacity, deterministic noise and gravity integration. RGB24 and RGBA32 have synthetic tests only because they were not present in the two reference bundles. Input and allocation sizes are bounded. Those limits do not imply support for every file below them.
 
 Remote URL downloads, every allocation failure, and arbitrary malformed skeleton data are not comprehensively tested.
 
@@ -41,7 +41,7 @@ $env:CGSS_BUNDLE_DIR = '.\local-bundles'
 node --test tests/*.test.mjs
 ```
 
-The post-refactor run passed all 14 tests with those bundles. Without that environment variable, the two reference tests are skipped and the other 12 run.
+The current local run passed 20 tests with the reference-bundle tests skipped. With the two reference bundles available, the same command should run 22 tests.
 
 Install Playwright for the optional browser checks:
 
@@ -51,7 +51,7 @@ node tests/browser-smoke.mjs /path/to/bundles
 node tests/standalone-browser-smoke.mjs /path/to/bundles
 ```
 
-Both browser checks passed after the refactor. Edge is the default. `BROWSER_CHANNEL` selects another installed Playwright browser channel. Only the desktop check requires Python. Set `PYTHON` if its executable is not named `python`. The supplied directory should contain only supported card bundles because the browser checks attempt every matching filename.
+Both browser checks passed with `card_cartoon_100612.unity3d`, `card_cartoon_201389.unity3d`, and `card_cartoon_300599.unity3d`. Edge is the default. `BROWSER_CHANNEL` selects another installed Playwright browser channel. Only the desktop check requires Python. Set `PYTHON` if its executable is not named `python`. The supplied directory should contain only supported card bundles because the browser checks attempt every matching filename.
 
 ## Historical reference comparison
 

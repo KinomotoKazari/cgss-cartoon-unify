@@ -42,27 +42,20 @@ Playback treats a `ParticleSystem` as an emitter when its GameObject is active, 
 | `InitialModule.startSize` | Draw size in scene units, then transformed by the Spine scene fit. |
 | `InitialModule.startColor` | Initial alpha source. The current implementation uses `maxColor` rather than a full colour-gradient evaluation. |
 | `InitialModule.maxNumParticles` | Upper bound for the generated particle count. |
-| `EmissionModule.rateOverTime` | Calculates a steady-state count near `rate × average lifetime`. |
+| `EmissionModule.rateOverTime` | Schedules continuous births on a fixed simulation clock. |
 | `ShapeModule.m_Position` and `m_Scale` | Uniform starting position in the module's local rectangular bounds. |
 | `VelocityModule.x/y` | Integrates constant or Hermite curve velocity over particle age. |
 | `ColorModule.gradient.maxGradient` | Alpha-gradient interpolation across normalized lifetime. |
 | `UVModule` | Samples start frame and frame-over-time across the whole texture sheet. |
-| `simulationSpeed`, `prewarm`, `lengthInSec` | Advances time, including a prewarm offset. |
+| `NoiseModule` | Adds a deterministic browser-side value-noise offset from the serialized module settings. |
+| `SizeModule` | Scales particle width and height over normalized lifetime. |
+| `InitialModule.gravityModifier` | Multiplies a configurable gravity vector. The default is `{x: 0, y: -9.81}`. |
+| `simulationSpeed`, `prewarm`, `lengthInSec` | Advances the emitter clock, including a simulated prewarm loop. |
 | GameObject Transform chain | Applies local scale, Z rotation, position, and ancestors before conversion to canvas space. |
 
-Particles are procedural rather than stored frame by frame. A fixed seed derived from the emitter and particle index gives stable preview motion for a load session. The current count is:
+Particles are procedural rather than stored frame by frame. `web/particle-simulation.js` advances each emitter at 60 Hz, accumulates `rateOverTime`, creates particles when the emission credit crosses a birth boundary, and removes each particle after its own lifetime. `autoRandomSeed = false` uses the serialized `randomSeed`; automatic seeds use a browser-generated seed for that load. Prewarm simulates one authored loop before the emitter becomes visible.
 
-```text
-lifeMin = min(startLifetime.scalar, startLifetime.minScalar)
-lifeMax = max(startLifetime.scalar, startLifetime.minScalar, 0.01)
-rateMax = max(rateOverTime.scalar, rateOverTime.minScalar, 0)
-count   = min(maxNumParticles || Infinity,
-              max(1, ceil(rateMax × (lifeMin + lifeMax) / 2)))
-```
-
-This count is a preview estimate, not a simulation of emission events. Its minimum of one means even a zero-rate eligible emitter can produce a particle. A zero particle limit is treated as unbounded. These are current approximation limits.
-
-For every frame, age wraps by its chosen lifetime. For additive effects, the browser adds a visual fade independent of the Unity asset data:
+For additive effects, the browser adds a visual fade independent of the Unity asset data:
 
 ```text
 fadeIn(age)  = smoothstep(0.00, 0.18, age)
@@ -75,7 +68,7 @@ Here `age` is normalized lifetime, and final opacity is clamped to [0, 1]. Fade 
 
 Before drawing, particle images are prepared once per emitter. Additive materials transform each RGB channel as `min(255, 4 × channel² / 255)` and use Canvas 2D `lighter`. Black remains black and bright edge pixels become brighter. Materials with `_BlendDst = 10` use source-over compositing and their authored alpha without bubble contrast or extra fades. A referenced `_AlphaTex` supplies the mask from red, or from A for decoded Alpha8 textures.
 
-The feather correction adds initial rotation, integrated rotation-over-lifetime, particle size scaling, and rotated shape bounds. Curve calculations live in `web/particle-math.js`. Weighted tangents, full 3D motion, exact emission scheduling and all Unity texture animation modes remain unsupported. See [Feather analysis](feather-analysis.md) for card 100612, the original failure, and verification results.
+The feather correction adds initial rotation, integrated rotation-over-lifetime, particle size scaling, rotated shape bounds, authored seeds, continuous emission, prewarm, gravity modifiers and noise offsets. Curve calculations live in `web/particle-math.js`, and emitter birth/death state lives in `web/particle-simulation.js`. Weighted tangents, full 3D motion, Unity's exact noise kernel and all Unity texture animation modes remain unsupported. See [Feather analysis](feather-analysis.md) for card 100612, the original failure, and verification results.
 
 ### Reference-card findings
 
@@ -89,10 +82,10 @@ All Spine layers are rendered first, then all particles are composited on the fi
 
 The following Unity particle features are not implemented or are only partially represented:
 
-- Burst emission, duration/loop stop semantics, start delay, and explicit simulation space.
+- Burst emission, rate-over-distance, duration/loop stop semantics, and explicit simulation space.
 - Shape geometry beyond the current rectangular position/scale sampling.
-- Rotation over lifetime, size over lifetime, texture-sheet frame animation, trails, collision, sub-emitters, force fields, and custom vertex streams.
-- Noise, gravity, limit velocity, inherit velocity, external forces, lights, and custom simulation jobs.
+- Trails, collision, sub-emitters, force fields, and custom vertex streams.
+- Limit velocity, inherit velocity, external forces, lights, and custom simulation jobs.
 - Full `MinMaxCurve` evaluation, random colours, colour RGB gradients, and material-specific particle shader properties.
 - Unity renderer sorting, soft particles, depth fading, fog, bloom, and post-processing.
 

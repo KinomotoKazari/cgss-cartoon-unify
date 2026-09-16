@@ -157,7 +157,7 @@ We developed against two representative cards. **201389 — 佐城雪美「あ�
 
 ## Remaining limits
 
-Particle playback is an approximation, not a complete Unity particle or shader implementation. We sample a subset of modules, composite particles after Spine, and use preview-specific fades and contrast. The player uses planar transforms while the inspector projects full Transform and Shape rotations. Exact curves, scene sorting, and shader equivalence need separate rendering work and visual reference data.
+Particle playback is an approximation, not a complete Unity particle or shader implementation. We sample a subset of modules, composite particles after Spine, and use preview-specific fades and contrast. The player now keeps per-particle birth/death state, authored seeds, prewarm, size-over-lifetime, gravity modifiers and deterministic browser-side noise, but Unity's exact random/noise kernels, full 3D particle motion, scene sorting and shader equivalence still need separate rendering work and visual reference data.
 
 The CGSS skeleton parser supports the custom binary header used by the tested cards. Other skeleton formats and exhaustive malformed-input handling need separate parser work. The current tests do not prove support for every CGSS asset.
 
@@ -167,7 +167,7 @@ The standalone folder contains committed copies so it can be hosted on its own. 
 
 We check parser failures, cancellation during viewer construction, error recovery, both reference cards and their RGBA hashes, and both browser distributions. Browser checks cover card swapping, pause, the static emitter reference frame, visible diagnostic fields, and the bare player entry.
 
-The post-refactor run passed 14 tests with both reference bundles, both browser smoke checks, and the standalone drift check. [Validation](docs/validation.md) records the commands, reference data, and test scope.
+The current run passed 20 local tests with the two optional reference-bundle tests skipped. Particle simulation has dedicated tests for zero-rate emitters, authored seeds, fixed time steps, prewarm, capacity, noise and gravity integration. Browser smoke checks passed with 100612, 201389 and 300599 in both distributions. [Validation](docs/validation.md) records the commands, reference data, and test scope.
 
 ## Development checks
 
