@@ -21,6 +21,36 @@ We built a browser-based bundle player and inspection tool:
 - **Document the rendering model.** We record the asset relationships, the reference game's native playback pipeline as an implementation guide, separate RGB/A8 textures, blending, and the limits of the browser renderer. [Particle and shader analysis](docs/rendering.md) explains the current behaviour and remaining work.
 - **Package it for reuse.** The project includes a Python-launched local preview, a standalone static site, and a bare player entry for embedding. Parsing runs in a Worker, and shared modules keep the two distributions aligned.
 
+## Current Renderer
+
+We compose skeleton groups and particle emitters on one shared WebGL target.
+This lets an effect render before, through, or after character content when its
+authored renderer order calls for it. Earlier versions placed every particle on
+top of the completed skeleton image, which prevented character occlusion.
+
+We keep the attachment order inside each skeleton and only batch consecutive
+geometry that uses compatible texture and blend settings. We keep equal-order
+groups stable and expose that fallback in diagnostics. We also apply the first
+animation pose before presenting the card, prewarm particle systems once, and
+keep pause and resume from adding hidden elapsed time.
+
+## Rendering pipeline
+
+```text
+Selected bundle
+  -> Worker reads card resources and effect-prefab references
+  -> Viewer builds skeleton state and particle simulations
+  -> Render plan orders skeleton groups and particle emitters
+  -> Shared WebGL target draws each group in order
+  -> Visible canvas receives one completed frame
+```
+
+We use known skeleton playback offsets and each particle renderer's
+`m_SortingOrder` to build the render plan. We can therefore place a negative
+particle order behind the character while a later effect stays in front. We keep
+the existing file selector, controls, standalone player, bare player, and
+emitter inspector on top of this rendering path.
+
 ## Screenshots and animation
 
 These captures come from the standalone player. The card preview screenshot uses **300599 — 赤城みりあ「一夜の魔法」**. The animation and particle inspector captures use **201389 — 佐城雪美「あなたに微笑むマドモアゼル」**. They show this project's rendering, including its current particle approximation.
