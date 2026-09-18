@@ -33,7 +33,7 @@ try {
     assert.ok(state.message.startsWith('Loaded '), state.message);
     const cardId = name.match(/(\d+)/)[1];
     assert.equal(state.title, 'CGSS ' + cardId);
-    assert.match(state.message, /Loaded 5 Spine layers/);
+    assert.match(state.message, /Loaded 5 skeleton groups/);
     if (cardId === '201389') assert.match(state.message, /21 particle emitters/);
     if (cardId === '300599') assert.match(state.message, /0 particle emitters/);
     await page.waitForTimeout(300);

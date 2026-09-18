@@ -6,7 +6,7 @@ We used [AssetStudio](https://github.com/Perfare/AssetStudio) as the reference f
 
 ## CGSS Resource Tool
 
-We are very grateful to [BA-Momoi's CGSS Resource Tool](https://github.com/BA-Momoi/cgss-resource-tool) and its spine_preview for the reference work behind this project's card layer order, RGB/A8 atlas composition, coordinate conversion, scene fitting, and Spine blend-mode handling. The project is available under the MIT License. Its notice is included in [licenses/CGSS-Resource-Tool-MIT.txt](licenses/CGSS-Resource-Tool-MIT.txt).
+The current player does not use CGSS Resource Tool's playback pipeline. We acknowledge [BA-Momoi's CGSS Resource Tool](https://github.com/BA-Momoi/cgss-resource-tool) and its `spine_preview` as earlier inspiration for RGB/A8 atlas composition, coordinate conversion, scene fitting, and Spine blend-mode handling. The project is available under the MIT License. Its notice is included in [licenses/CGSS-Resource-Tool-MIT.txt](licenses/CGSS-Resource-Tool-MIT.txt).
 
 No CGSS Resource Tool application files are bundled as a runtime dependency.
 
@@ -22,6 +22,7 @@ We are very thankful to [MDUI](https://www.mdui.org/) for its Material Design di
 
 The same notices apply to the synchronized copies under `web-cartoon-player/runtime/` and `web-cartoon-player/src/`. When redistributing the standalone folder, include this notice and the files in `licenses/`. [licenses/README.md](licenses/README.md) explains the mapping.
 
-## Reference fixtures
+## Test assets
 
-No game bundles, textures, or skeletons are included. Tests store only reference texture dimensions and RGBA SHA-256 hashes obtained from AssetStudio exports. Supply your own bundle files to run integration checks.
+We do not include game bundles, textures, or skeletons. Supply bundle files you
+are entitled to use when running integration checks.

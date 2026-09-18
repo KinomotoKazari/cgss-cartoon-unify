@@ -1,49 +1,41 @@
 # Validation
 
-We verified the browser parser against reference exports for two card bundles. The reference extractor was used only during development. Neither the desktop preview nor `web-cartoon-player/` loads or requires it at runtime.
+We use automated checks to protect the browser player, parser, particle model,
+and standalone distribution. These checks support maintenance. They do not claim
+pixel-identical output for every card or every runtime feature.
 
-| Check | 201389<br>佐城雪美「あなたに微笑むマドモアゼル」 | 300599<br>赤城みりあ「一夜の魔法」 |
-|---|---:|---:|
-| UnityFS / serialized version | 7 / 22 | 6 / 17 |
-| Object inventory matches | 120 | 19 |
-| Object bodies compared | 105 | 10 |
-| Skeleton byte comparisons | 5 exact | 5 exact |
-| Atlas text comparison | Exact | Exact |
-| RGBA pixel comparisons | 7 exact | 2 exact |
-| Browser Spine layers | 5 | 5 |
-| Browser emitting particle systems | 21 | 0 |
+## Focused checks
 
-Object field comparisons allow a small floating-point serialization tolerance. PathIDs stay as `BigInt` while parsing and become file-qualified strings in the playback plan. Texture SHA-256 fixtures cover decoded pixel data, including row orientation and alpha. All nine stored texture hashes match their references.
+We run focused Node checks for parser bounds, particle scheduling, render-plan
+order, playback lifecycle, and WebGL submissions:
 
-Both browser smoke checks load each supplied card and then reload the first, verify that **Pause** freezes the canvas, and check the bare player. With card 201389 present, they also check 21 emitter markers, visibility of the sorting-order field, and a stationary reference frame. They fail on JavaScript errors and confirm that loading does not issue POST requests.
+```sh
+node --test tests/scene-runtime.test.mjs tests/render-plan.test.mjs tests/webgl-submission.test.mjs tests/particle-simulation.test.mjs
+```
 
-The desktop check also submits a malformed file and checks that loading becomes available again. The standalone check also verifies inspector page padding and that the bare file selector is visible while the initial canvas is hidden. Desktop screenshots are saved to `test-output/` and standalone comparisons stay in memory. Earlier reference screenshots were visually inspected. Automated smoke checks do not establish visual equivalence with the official game.
+The rendering checks cover initial pose application, skeleton and emitter group
+order, partial skeleton sets, stable equal-order fallback, pause and resume
+timing, frame errors, resource cleanup, texture switching, and blend state.
+They record WebGL commands. They do not rasterize or compare final GPU pixels.
 
-These checks verify the bundle-loading and Spine-rendering path. Particle rendering remains an approximation of Unity's particle system, so it is not asserted to be pixel-identical.
-
-Parser tests also cover malformed LZ4 input, unsupported formats, missing TypeTrees, binary bounds including invalid reader positions, 64-bit IDs, row flipping, cross-file PPtr resolution, and rejection of partial decode caches. Load-session tests cover cancellation during asynchronous viewer construction and recovery after a Worker error. Particle math tests cover renderer ordering, signed velocity integration, curve modes and scale modes. Particle simulation tests cover zero-rate emitters, authored seeds, fixed time steps, prewarm, capacity, deterministic noise and gravity integration. RGB24 and RGBA32 have synthetic tests only because they were not present in the two reference bundles. Input and allocation sizes are bounded. Those limits do not imply support for every file below them.
-
-Remote URL downloads, every allocation failure, and arbitrary malformed skeleton data are not comprehensively tested.
-
-## Running the checks
-
-From the repository root:
+We run the complete Node suite with:
 
 ```sh
 node --test tests/*.test.mjs
-node scripts/sync-standalone.mjs --check
 ```
 
-Set `CGSS_BUNDLE_DIR` to a directory containing `card_cartoon_201389.unity3d` and `card_cartoon_300599.unity3d` for reference integration tests. For example, in PowerShell:
+We keep standalone shared files synchronized with:
 
-```powershell
-$env:CGSS_BUNDLE_DIR = '.\local-bundles'
-node --test tests/*.test.mjs
+```sh
+npm run sync:standalone
+npm run check:standalone
 ```
 
-The current local run passed 20 tests with the reference-bundle tests skipped. With the two reference bundles available, the same command should run 22 tests.
+## Browser checks
 
-Install Playwright for the optional browser checks:
+We use Playwright and a current Edge installation for optional browser smoke
+checks. Supply a directory containing supported bundle files that you are
+entitled to use:
 
 ```sh
 npm install --no-save --package-lock=false playwright
@@ -51,22 +43,17 @@ node tests/browser-smoke.mjs /path/to/bundles
 node tests/standalone-browser-smoke.mjs /path/to/bundles
 ```
 
-Both browser checks passed with `card_cartoon_100612.unity3d`, `card_cartoon_201389.unity3d`, and `card_cartoon_300599.unity3d`. Edge is the default. `BROWSER_CHANNEL` selects another installed Playwright browser channel. Only the desktop check requires Python. Set `PYTHON` if its executable is not named `python`. The supplied directory should contain only supported card bundles because the browser checks attempt every matching filename.
+We use `PYTHON` to select the Python executable for the desktop check. We use
+`BROWSER_CHANNEL` to select another Playwright browser channel when needed.
 
-## Historical reference comparison
+Browser checks verify file loading, card replacement, playback controls, the
+static inspector, and the bare player. They report browser errors and unexpected
+POST requests. They are smoke checks. We still review card appearance manually
+when changing rendering behavior.
 
-The object-body, skeleton, and atlas comparisons in the table above came from prepared reference exports. They are separate from the current automated RGBA hash and metadata checks and were not rerun as part of the refactor.
+## Limits
 
-To compare a bundle against an existing prepared reference export during development:
-
-```sh
-node tests/compare-reference.mjs /path/to/card.unity3d /path/to/prepared-reference
-```
-
-The reference directory must contain `scene/objects.json`, per-object JSON files, and `assets/TextAsset/` from the earlier extraction flow. Reference exports and game files are not included in this repository.
-
-## Authored particle fixes
-
-The implementation following the 100612 and 100263 audits adds six focused tests: cone-base area distribution and direction, acceleration with total velocity scaling, frame-independent per-tick force with prewarm, quaternion depth preservation, active gradient keys/modes, and shader RGBA saturation. These passed, as did the existing local tests. Two optional reference-hash tests were skipped.
-
-Both browser suites passed for 100263 (3 visible emitters), 100612 (8), 201389 (21), and 300599 (0). Screenshots for the leaf and feather cards were inspected. This verifies loading, visible particles and playback controls, not official trajectory, camera or occlusion equivalence. Raw bundles and generated screenshots remain in ignored local output.
+We do not ship game resources or test bundles. We cannot use automated checks
+to prove every card, camera setting, material, or particle path. We track the
+supported player behavior and open rendering limits in [Rendering model](rendering.md)
+and the 2.0.0 composition change in [Release notes](releases/2.0.0.md).

@@ -25,7 +25,7 @@ export function mountPreviewPage({inspect = false} = {}) {
         viewer.renderOnce();
         viewer.pause();
       } else {
-        status.textContent = `Loaded ${viewer.skeletons.length} Spine layers and ${viewer.particles.count} particle emitters.`;
+        status.textContent = `Loaded ${viewer.skeletons.length} skeleton groups and ${viewer.particles.count} particle emitters.`;
       }
     }
   });

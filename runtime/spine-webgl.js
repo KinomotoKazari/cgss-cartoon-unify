@@ -15,8 +15,12 @@
     'varying vec2 vUV;' +
     'varying vec4 vColor;' +
     'uniform sampler2D uTex;' +
+    'uniform float uParticle;' +
+    'uniform float uGain;' +
     // Match the canvas compositor's premultiplied alpha.
     'void main(){ vec4 t = texture2D(uTex, vUV);' +
+    'if(uParticle > 0.5){ vec4 c = clamp(t * vColor * uGain, 0.0, 1.0);' +
+    'gl_FragColor = vec4(c.rgb * c.a, c.a); return; }' +
     'float a = t.a * vColor.a;' +
     'gl_FragColor = vec4(t.rgb * vColor.rgb * a, a); }';
 
@@ -71,6 +75,8 @@
     this.aUV = gl.getAttribLocation(this.program, 'aUV');
     this.aColor = gl.getAttribLocation(this.program, 'aColor');
     this.uTex = gl.getUniformLocation(this.program, 'uTex');
+    this.uParticle = gl.getUniformLocation(this.program, 'uParticle');
+    this.uGain = gl.getUniformLocation(this.program, 'uGain');
 
     this.vbo = gl.createBuffer();
     this.texCache = new Map();
@@ -92,7 +98,11 @@
 
   CGSSWebGLRenderer.prototype.clear = function (r, g, b, a) {
     var gl = this.gl;
+    // Discard unfinished geometry left by a failed frame before retrying.
+    this._batch.length = 0;
     gl.disable(gl.SCISSOR_TEST);
+    gl.colorMask(true, true, true, true);
+    gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(r, g, b, a);
     gl.clear(gl.COLOR_BUFFER_BIT);
   };
@@ -100,14 +110,23 @@
   CGSSWebGLRenderer.prototype._texture = function (img) {
     if (!img) return null;
     if (this.texCache.has(img)) return this.texCache.get(img);
+    // Uploading binds a new texture. Submit pending geometry with its old binding first.
+    this._flush();
     var gl = this.gl;
     var tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    try {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    } catch (error) {
+      gl.deleteTexture(tex);
+      throw error;
+    }
     this.texCache.set(img, tex);
     return tex;
   };
@@ -157,6 +176,11 @@
     gl.enable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(this.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.colorMask(true, true, true, true);
+    gl.uniform1f(this.uParticle, 0);
+    gl.uniform1f(this.uGain, 1);
 
     var skeletonColor = skeleton.color;
     var drawOrder = skeleton.drawOrder;
@@ -204,6 +228,7 @@
         }
       } else if (attachment instanceof spine.RegionAttachment) {
         var region = attachment;
+        if (!region.region || !region.region.renderObject) continue;
         var tex2 = this._texture(region.region.renderObject.texture.getImage());
         if (!tex2) continue;
         var world4 = this._world4 || new Float32Array(8);
@@ -219,6 +244,32 @@
       }
     }
     this._flush();
+  };
+
+  CGSSWebGLRenderer.prototype.drawParticle = function (image, sprite) {
+    var gl = this.gl;
+    this._flush();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this._texture(image));
+    gl.useProgram(this.program);
+    gl.enable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.blendEquation(gl.FUNC_ADD);
+    // Particle shader output is premultiplied; preserve destination alpha.
+    gl.blendFunc(gl.ONE, sprite.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+    gl.colorMask(true, true, true, false);
+    gl.uniform1f(this.uParticle, 1);
+    gl.uniform1f(this.uGain, sprite.gain);
+    var c = Math.cos(sprite.angle), s = Math.sin(sprite.angle);
+    var corners = [[-.5,-.5,0,0],[.5,-.5,1,0],[.5,.5,1,1],[-.5,.5,0,1]];
+    var indices = [0,1,2,0,2,3], color = sprite.color, uv = sprite.region;
+    for (var i = 0; i < indices.length; i++) {
+      var p = corners[indices[i]], x = p[0]*sprite.width, y = p[1]*sprite.height;
+      this._push(null, sprite.x+x*c-y*s, sprite.y+x*s+y*c,
+        uv.u+p[2]*uv.width, uv.v+p[3]*uv.height, color.r, color.g, color.b, color.a);
+    }
+    this._flush();
+    gl.colorMask(true, true, true, true);
   };
 
   CGSSWebGLRenderer.prototype.dispose = function () {

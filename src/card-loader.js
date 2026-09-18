@@ -2,7 +2,7 @@ import {readBundle} from './bundle-reader.js';
 import {ObjectResolver, pairs} from './object-resolver.js';
 import {decodeTexture} from './texture-decoder.js';
 
-const layers = ['bg', 'eff2', 'chara', 'eff1', 'fg'];
+const slots = ['bg', 'eff2', 'chara', 'fg', 'eff1'];
 const textDecoder = new TextDecoder();
 
 function hierarchy(resolver, root) {
@@ -39,7 +39,7 @@ function planData(resolver, owner, value) {
 }
 
 export function loadCard(bytes, progress = () => {}) {
-  // Extract the five Spine layers and effect prefabs needed by the browser renderer.
+  // Extract named Spine resource slots and optional effect prefabs.
   progress('Reading bundle…');
   const bundle = readBundle(bytes), resolver = new ObjectResolver(bundle);
   progress('Resolving card assets…');
@@ -76,9 +76,9 @@ export function loadCard(bytes, progress = () => {}) {
       }
     }
   }
-  if (skeletons.length !== 5 || layers.some(layer => !skeletons.some(item => item.layer === layer))) throw new Error('Card must contain all five Spine layers');
+  if (!skeletons.length) throw new Error('Card has no supported Spine skeletons');
   if (atlases.size !== 1) throw new Error('This preview supports one shared Spine atlas');
-  skeletons.sort((a,b) => layers.indexOf(a.layer) - layers.indexOf(b.layer));
+  skeletons.sort((a,b) => slots.indexOf(a.layer) - slots.indexOf(b.layer));
   const atlasObject = [...atlases.values()][0], atlasData = resolver.data(atlasObject);
   if (atlasData.materials.length !== 1) throw new Error('Multi-page Spine atlases are not yet supported');
   const atlasText = textDecoder.decode(resolver.data(resolver.resolve(atlasObject, atlasData.atlasFile)).m_Script);

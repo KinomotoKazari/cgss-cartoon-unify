@@ -13,12 +13,12 @@ Game bundles and extracted assets are not included. The images below demonstrate
 
 ## What we added
 
-We built on the CGSS Spine preview work credited below and extended it into a browser-based bundle player and inspection tool:
+We built a browser-based bundle player and inspection tool:
 
 - **Load the original bundle directly.** Our JavaScript pipeline reads UnityFS, decompresses storage blocks, decodes serialized objects and textures, and follows asset references. You can select one card bundle without manually exporting skeletons, atlases, or textures, and without calling an AssetStudio DLL.
-- **Bring particle effects into the preview.** We added playback for referenced particle prefabs, including the bubbles and light specks in the Yukimi example below. The loader follows prefab, renderer, material, and texture references instead of guessing which images to load from their filenames. Cards without particle prefabs also work. Playback uses a subset of Unity particle data with approximate fades, additive compositing, and highlight adjustments.
+- **Bring particle effects into the preview.** We added playback for referenced particle prefabs, including the bubbles and light specks in the Yukimi example below. The loader follows prefab, renderer, material, and texture references instead of guessing which images to load from their filenames. Cards without particle prefabs also work. Playback uses a subset of Unity particle data with explicit simulation and presentation stages.
 - **Make the particle data inspectable.** The separate emitter inspector projects authored positions and source volumes onto the card, and exposes textures, materials, transforms, lifetime, emission settings, and sorting metadata.
-- **Document the rendering research.** We traced the asset relationships and investigated particle placement, separate RGB/A8 textures, blending, and the limits of the browser shader approximation. [Particle and shader analysis](docs/rendering.md) explains the findings and what still needs work.
+- **Document the rendering model.** We record the asset relationships, the reference game's native playback pipeline as an implementation guide, separate RGB/A8 textures, blending, and the limits of the browser renderer. [Particle and shader analysis](docs/rendering.md) explains the current behaviour and remaining work.
 - **Package it for reuse.** The project includes a Python-launched local preview, a standalone static site, and a bare player entry for embedding. Parsing runs in a Worker, and shared modules keep the two distributions aligned.
 
 ## Screenshots and animation
@@ -37,7 +37,7 @@ These captures come from the standalone player. The card preview screenshot uses
 
 A six-second recording of the browser player, reduced in size and colour depth for the GIF. Its loop boundary is the end of the recording, not necessarily the end of the card's animation.
 
-![Animated Yukimi card rendered from its UnityFS bundle with Spine layers and particle effects](docs/images/card-animation.gif)
+![Animated Yukimi card rendered from its UnityFS bundle with skeleton and particle effects](docs/images/card-animation.gif)
 
 ### Particle position analysis
 
@@ -119,12 +119,12 @@ The bare player reports loading errors in the browser console. If it appears emp
 | Compression | Raw, LZ4, and LZ4HC |
 | Serialized files | Versions 17 and 22 with embedded TypeTrees |
 | Textures | RGB565, Alpha8, ETC_RGB4, RGB24, and RGBA32 |
-| Card layers | Five Spine layers using one atlas page |
+| Skeleton assets | One or more supported named skeleton assets using one atlas page |
 | References | File-aware 64-bit PPtrs when the referenced files are inside the selected bundle |
 
-The scene keeps the original preview's coordinate conversion, RGB/A8 composition, and layer order: `bg → eff2 → chara → eff1 → fg`. Particle textures are discovered through prefab and material references. We approximate Unity particle playback, including its fades and highlights. For the data flow, current shader approximation, and known gaps, see [Particle and shader analysis](docs/rendering.md).
+We use RGB/A8 atlas composition, explicit Spine and particle simulation stages, an ordered render plan, and one shared WebGL target. We discover particle textures through prefab and material references. We use known skeleton slots and particle renderer metadata for cross-object placement. We use a documented deterministic fallback when keys are equal. See [Rendering model](docs/rendering.md) for the current pipeline and known gaps.
 
-We developed against two representative cards. **201389 — 佐城雪美「あなたに微笑むマドモアゼル」** is a later card-animation version with particles. **300599 — 赤城みりあ「一夜の魔法」** is an earlier version without particles. Together they cover the two animation generations we wanted to support first. Other versions, codecs, missing TypeTrees, or external dependencies report an error.
+We use representative particle and non-particle cards during maintenance. We report an error for unsupported versions, codecs, missing TypeTrees, or external dependencies.
 
 ## Project layout
 
@@ -148,8 +148,9 @@ We developed against two representative cards. **201389 — 佐城雪美「あ�
 | `src/` | Bundle decoding, references, textures, and card assembly |
 | `src/loader-worker.js` | Read a file or URL, enforce the input limit, then transfer the parsed card |
 | `web/load-session.js` | Own the active load and viewer, then discard cancelled results |
-| `web/viewer.js` | Assemble renderers, advance frames, and release resources |
-| `web/particle-overlay.js` | Resolve materials and composite particle sprites |
+| `web/viewer.js` | Compatibility facade for the runtime and inspector |
+| `web/scene-runtime.js` | Own playback clock, state updates, presentation, and disposal |
+| `web/particle-overlay.js` | Resolve particle materials and draw the current particle population |
 | `web/particle-motion.js` | Sample emitter shapes and integrate force/velocity |
 | `web/particle-color.js` | Evaluate gradients and particle fragment colors |
 | `web/particle-simulation.js` | Schedule births, deaths, prewarm and fixed ticks |
@@ -160,7 +161,7 @@ We developed against two representative cards. **201389 — 佐城雪美「あ�
 
 ## Remaining limits
 
-Particle playback is an approximation, not a complete Unity implementation. We now evaluate authored RGB/alpha gradients, the two audited particle shader equations, Box and cone-base emission, and fixed-step force/velocity motion. Birth/death timing, seeds, prewarm, size curves and gravity remain supported. Particles still composite after Spine. Unity's exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting and full 3D billboards remain unresolved. See [Rendering analysis](docs/rendering.md) for the supported parameters and limits.
+We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, the two supported particle shader equations, Box and cone-base emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, size curves, and gravity. We submit all scene geometry in render-plan order to one WebGL target. Exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting, camera-bone binding, startup policy, and full 3D billboards remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
 
 The CGSS skeleton parser supports the custom binary header used by the tested cards. Other skeleton formats and exhaustive malformed-input handling need separate parser work. The current tests do not prove support for every CGSS asset.
 
@@ -168,9 +169,9 @@ The standalone folder contains committed copies so it can be hosted on its own. 
 
 ## Validation
 
-We check parser failures, cancellation during viewer construction, error recovery, both reference cards and their RGBA hashes, and both browser distributions. Browser checks cover card swapping, pause, the static emitter reference frame, visible diagnostic fields, and the bare player entry.
+The verification suite covers parser failures, cancellation during viewer construction, error recovery, representative cards and their RGBA hashes, the separated runtime update/draw boundary, and both browser distributions. Browser checks cover card swapping, pause, the static emitter reference frame, visible diagnostic fields, and the bare player entry. See [Validation](docs/validation.md) for the recorded scope and the distinction between historical results and future runs.
 
-Local tests cover cone distribution, force integration, frame-independent random force, quaternion transforms, gradient modes and shader saturation, alongside the existing parser and simulation checks. Both browser smoke suites passed with 100263, 100612, 201389 and 300599. The two optional reference-hash tests were skipped in this run. [Validation](docs/validation.md) records the commands, reference data, and test scope.
+We cover parser failures, particle simulation, render-plan order, playback lifecycle, and WebGL submission state with focused checks. We also maintain browser smoke checks for both distributions. [Validation](docs/validation.md) records the public test commands and scope.
 
 ## Development checks
 
@@ -191,8 +192,6 @@ Shared entry scripts such as `embed-player.js` and `emitter-debug.js` are also s
 node --test tests/*.test.mjs
 ```
 
-Set `CGSS_BUNDLE_DIR` to a directory containing the two tested card bundles to run the optional integration checks. Without it, those tests are explicitly skipped.
-
 The optional browser smoke test requires Playwright and Edge:
 
 ```sh
@@ -201,19 +200,19 @@ node tests/browser-smoke.mjs /path/to/bundles
 node tests/standalone-browser-smoke.mjs /path/to/bundles
 ```
 
-The first command starts `run.py`. Use `PYTHON` to select its Python executable. The second starts its own Node.js static server and does not need Python. Both accept `BROWSER_CHANNEL` to select another installed Playwright browser channel. The desktop check saves screenshots in the ignored `test-output/` directory. Standalone comparisons stay in memory.
+The first command starts `run.py`. Use `PYTHON` to select its Python executable. The second starts its own Node.js static server and does not need Python. Both accept `BROWSER_CHANNEL` to select another installed Playwright browser channel.
 
 See [Validation](docs/validation.md) for tested cards, assertions, and limits.
 
 ## Credits
 
-We are very grateful to [BA-Momoi's CGSS Resource Tool](https://github.com/BA-Momoi/cgss-resource-tool), especially its spine_preview. Its clear treatment of card layer order, RGB/A8 atlas composition, Y-axis conversion, scene fitting, and Spine blend modes gave this player a strong technical starting point.
+We thank [MDUI](https://www.mdui.org/) for its Material Design direction, which inspired the local preview and inspector interface.
 
-We are very thankful to [MDUI](https://www.mdui.org/) for its thoughtful Material Design direction, which inspired the local preview and inspector interface.
+We built the UnityFS, SerializedFile, TypeTree, and shared-string handling with [AssetStudio](https://github.com/Perfare/AssetStudio) as the reference. AssetStudio is MIT licensed. We do not distribute or load AssetStudio binaries.
 
-We built the UnityFS, SerializedFile, TypeTree, and shared-string handling with [AssetStudio](https://github.com/Perfare/AssetStudio) as the reference. AssetStudio is MIT licensed. This repository does not distribute or load AssetStudio binaries.
+We bundle the Spine core and canvas runtime from [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) 3.6 by Esoteric Software. They are distributed under the Spine Runtimes Software License v2.5.
 
-The bundled Spine core and canvas runtime come from [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) 3.6 by Esoteric Software. They are distributed under the Spine Runtimes Software License v2.5.
+We do not use CGSS Resource Tool's playback pipeline in the current ordered WebGL architecture. We still acknowledge [BA-Momoi's CGSS Resource Tool](https://github.com/BA-Momoi/cgss-resource-tool) and `spine_preview` for earlier inspiration around atlas handling, coordinates, scene fitting, and Spine blending. We retain the related MIT notice in this repository.
 
 ## License notices
 

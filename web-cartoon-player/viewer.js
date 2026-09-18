@@ -1,4 +1,5 @@
 import {mountParticleInspector} from './particle-inspector.js';
+import {createSceneRuntime} from './scene-runtime.js';
 
 function surface(texture) {
   // Convert transferred RGBA pixels into a reusable CanvasImageSource.
@@ -9,7 +10,7 @@ function surface(texture) {
 }
 
 function fitScene(skeletons, canvas) {
-  // Fit all Spine layers into the square card viewport with a small visual margin.
+  // Preview fit policy: fit skeleton bounds with a small visual margin.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const {skeleton} of skeletons) {
     const offset = new spine.Vector2(), size = new spine.Vector2();
@@ -24,20 +25,27 @@ function fitScene(skeletons, canvas) {
 }
 
 export async function createViewer(card, canvas, getSpeed = () => 1) {
-  // Assemble Spine layers and the particle approximation for one decoded card.
-    // Images are indexed by Unity object id for Spine atlas and particle material lookup.
-    const images = {};
-  let composite, particles, renderer, glCanvas;
-  let disposed = false, frameId, inspector = null;
+  // Images are indexed by Unity object id for atlas and material lookup.
+  const images = {};
+  let composite, particles, renderer, glCanvas, runtime;
+  let disposed = false, inspector = null;
   function dispose() {
     if (disposed) return;
     disposed = true;
-    cancelAnimationFrame(frameId);
-    inspector?.dispose();
-    particles?.dispose();
-    renderer?.dispose();
-    for (const image of Object.values(images)) { image.width = 0; image.height = 0; }
-    if (composite) { composite.width = 0; composite.height = 0; }
+    try {
+      try { inspector?.dispose(); }
+      finally {
+        if (runtime) runtime.dispose();
+        else {
+          try { particles?.dispose(); }
+          finally { renderer?.dispose(); }
+        }
+      }
+    } finally {
+      for (const image of Object.values(images)) { image.width = 0; image.height = 0; }
+      if (composite) { composite.width = 0; composite.height = 0; }
+      if (glCanvas) { glCanvas.width = 0; glCanvas.height = 0; }
+    }
   }
   try {
     for (const texture of card.textures) images[texture.id] = surface(texture);
@@ -62,43 +70,28 @@ export async function createViewer(card, canvas, getSpeed = () => 1) {
       return {layer:entry.layer, skeleton, state};
     });
     const fit = fitScene(skeletons, canvas);
-    particles = await CGSSParticleOverlay.create({plan:card.plan, config:{particleImages:images, textureFormats:Object.fromEntries(card.textures.map(t=>[t.id,t.format]))}, canvas, fit});
+    particles = await CGSSParticleOverlay.create({plan:card.plan, config:{particleImages:images, textureFormats:Object.fromEntries(card.textures.map(t=>[t.id,t.format]))}});
     glCanvas = document.createElement('canvas'); glCanvas.width = canvas.width; glCanvas.height = canvas.height;
     renderer = new CGSSWebGLRenderer(glCanvas, {preserveDrawingBuffer:true});
     const context = canvas.getContext('2d');
-    let playing = true, previous = performance.now();
-    particles.start();
-    const draw = now => {
-      if (disposed) return;
-      frameId = requestAnimationFrame(draw);
-      const delta = Math.min(.05, (now-previous)/1000); previous = now;
-      if (!playing) return;
-      const requestedSpeed = Number(getSpeed());
-      const speed = Number.isFinite(requestedSpeed) && requestedSpeed >= 0 ? requestedSpeed : 1;
-      render(delta * speed);
-    };
-    function render(delta) {
-      // Render Spine through WebGL, then draw additive particles on the output canvas.
-      renderer.setTransform(fit.scale, fit.tx, fit.ty); renderer.clear(.2,.2,.2,1);
-      for (const item of skeletons) { item.state.update(delta); item.state.apply(item.skeleton); item.skeleton.updateWorldTransform(); renderer.draw(item.skeleton); }
-      context.setTransform(1,0,0,1,0,0); context.globalAlpha = 1; context.globalCompositeOperation = 'source-over';
-      context.drawImage(glCanvas,0,0); particles.draw(delta);
-    };
-    frameId = requestAnimationFrame(draw);
-    return {skeletons, particles, summary:card.summary, fit,
-      renderOnce() { if (!disposed) render(0); },
+    if (!context) throw new Error('Canvas 2D is unavailable');
+    runtime = createSceneRuntime({skeletons, particles, renderer, context, glCanvas, fit, getSpeed});
+    return {skeletons, particles, summary:card.summary, fit, diagnostics:runtime.diagnostics,
+      renderOnce() { if (!disposed) runtime.renderOnce(); },
       createParticleInspector(viewport, panel) {
+        if (disposed) throw new Error('Viewer is disposed');
         inspector?.dispose();
         inspector = mountParticleInspector({plan:card.plan, fit, images, canvas, viewport, panel});
         inspector.setVisible(false);
         return inspector;
       },
-      play() { playing = true; previous = performance.now(); particles.resume(); },
-      pause() { playing = false; particles.pause(); },
+      play() { runtime.play(); },
+      pause() { runtime.pause(); },
       dispose
     };
   } catch (error) {
-    dispose();
+    try { dispose(); }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Viewer creation and cleanup failed'); }
     throw error;
   }
 }
