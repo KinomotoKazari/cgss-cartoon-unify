@@ -26,6 +26,15 @@ test('cone births occupy the base disk, with outward unit directions',()=>{
   assert.ok(Math.abs(radiusSquared/2000-2)<.1);
 });
 
+test('single-sided edge uses its full local X extent before shape transforms',()=>{
+  const shape={enabled:true,type:10,radius:{value:2},m_Position:{x:3,y:4,z:5},
+    m_Rotation:{},m_Scale:{x:10,y:20,z:30}};
+  const left=sampleShape(shape,()=>0),right=sampleShape(shape,()=>1);
+  assert.deepEqual(left.position,{x:-17,y:4,z:5});
+  assert.deepEqual(right.position,{x:23,y:4,z:5});
+  assert.deepEqual(left.direction,{x:0,y:0,z:1});
+});
+
 test('force integrates acceleration and speedModifier scales initial velocity too',()=>{
   const system={ShapeModule:{enabled:false},InitialModule:{startSpeed:constant(2)},
     ForceModule:{enabled:true,x:constant(2),y:constant(0),z:constant(0)},

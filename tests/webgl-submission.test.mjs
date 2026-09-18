@@ -22,7 +22,7 @@ function fixture() {
     uniform1f(name,value) { uniforms[name] = value; },
     bufferData(_, data) { vertices = Array.from(data); },
     drawArrays(_, start, count) { draws.push({image:texture.image, blend:[...blend], mask:[...mask],
-      particle:uniforms.uParticle, gain:uniforms.uGain, vertices, count}); },
+      particle:uniforms.uParticle, maskAlpha:uniforms.uParticleMask, gain:uniforms.uGain, vertices, count}); },
     deleteTexture(value) { deleted.push(value); }
   };
   for (const name of ['shaderSource','compileShader','attachShader','linkProgram','deleteShader',
@@ -65,12 +65,12 @@ test('particle and Spine submissions restore shader, blend, alpha mask and cache
   f.renderer.draw(f.skeleton([[atlas]]));
   f.renderer.drawParticle(particle,sprite);
   f.renderer.draw(f.skeleton([[atlas]]));
-  f.renderer.drawParticle(particle,{...sprite,gain:1,additive:false});
-  assert.deepEqual(f.draws.map(d => [d.particle,d.gain,d.mask,d.blend]), [
-    [0,1,[true,true,true,true],['ONE','ONE_MINUS_SRC_ALPHA']],
-    [1,2,[true,true,true,false],['ONE','ONE']],
-    [0,1,[true,true,true,true],['ONE','ONE_MINUS_SRC_ALPHA']],
-    [1,1,[true,true,true,false],['ONE','ONE_MINUS_SRC_ALPHA']]
+  f.renderer.drawParticle(particle,{...sprite,gain:1,additive:false,maskAlpha:true});
+  assert.deepEqual(f.draws.map(d => [d.particle,d.maskAlpha,d.gain,d.mask,d.blend]), [
+    [0,0,1,[true,true,true,true],['ONE','ONE_MINUS_SRC_ALPHA']],
+    [1,0,2,[true,true,true,false],['ONE','ONE']],
+    [0,0,1,[true,true,true,true],['ONE','ONE_MINUS_SRC_ALPHA']],
+    [1,1,1,[true,true,true,false],['ONE','ONE_MINUS_SRC_ALPHA']]
   ]);
   assert.equal(f.draws[2].image,atlas);
   assert.deepEqual(f.draws[1].vertices.slice(0,4),[-.5,.5,.5,0]);

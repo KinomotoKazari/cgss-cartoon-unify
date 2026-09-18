@@ -40,6 +40,12 @@ test('bundle reader rejects unsupported signatures and truncation', () => {
   assert.throws(() => readBundle(new TextEncoder().encode('UnityWeb\0')),/Expected a UnityFS/);
   assert.throws(() => readBundle(new TextEncoder().encode('UnityFS\0')),/Truncated/);
 });
+test('UnityFS 8 reaches normal header parsing', () => {
+  const bytes = new Uint8Array(12);
+  bytes.set(new TextEncoder().encode('UnityFS\0'));
+  new DataView(bytes.buffer).setUint32(8, 8);
+  assert.throws(() => readBundle(bytes), /Truncated/);
+});
 test('serialized reader rejects stripped TypeTrees', () => {
   const bytes = new Uint8Array(64), view = new DataView(bytes.buffer);
   view.setUint32(0,30); view.setUint32(4,64); view.setUint32(8,17); view.setUint32(12,64);
@@ -77,4 +83,13 @@ test('PPtr resolution includes serialized-file identity', () => {
   assert.equal(resolver.resolve(a,{m_FileID:1,m_PathID:1n}),b);
   assert.equal(resolver.resolve(a,{m_FileID:0,m_PathID:0n}),null);
   assert.throws(() => resolver.resolve(a,{m_FileID:2,m_PathID:1n}),/dependency/);
+});
+test('billboard particle renderers do not resolve their dormant built-in mesh', () => {
+  const renderer={key:'a:1',file:'a',pathId:'1',type:'ParticleSystemRenderer'};
+  const material={key:'a:2',file:'a',pathId:'2',type:'Material'};
+  const resolver=Object.create(ObjectResolver.prototype);
+  resolver.files=new Map([['a',{path:'a',externals:['Library/unity default resources'],objects:new Map([['1',renderer],['2',material]])}]]);
+  resolver.data=object=>object===renderer?{m_RenderMode:0,m_Materials:[{m_FileID:0,m_PathID:2n}],m_Mesh:{m_FileID:1,m_PathID:10202n}}:{};
+  const closure=resolver.closure([renderer]);
+  assert.deepEqual([...closure.keys()],['a:1','a:2']);
 });

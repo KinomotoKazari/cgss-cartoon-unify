@@ -7,7 +7,7 @@ export function readBundle(input) {
   if (reader.bytes.length > MAX_BYTES) throw new Error('Bundle exceeds 512 MB');
   if (reader.cstring() !== 'UnityFS') throw new Error('Expected a UnityFS bundle');
   const version = reader.u32();
-  if (version !== 6 && version !== 7) throw new Error(`Unsupported UnityFS version ${version}`);
+  if (![6, 7, 8].includes(version)) throw new Error(`Unsupported UnityFS version ${version}`);
   const playerVersion = reader.cstring(), unityVersion = reader.cstring();
   const size = safeNumber(reader.i64()), compressedSize = reader.u32(), infoSize = reader.u32(), flags = reader.u32();
   if (size !== reader.bytes.length) throw new Error('Bundle size does not match its header');

@@ -67,7 +67,7 @@ pending triangles from being submitted with a different texture binding.
 
 `web/particle-simulation.js` manages particle birth, lifetime, fixed updates,
 prewarm, seeds, force/velocity motion, gravity, size, rotation, texture-sheet
-progression, and the supported Box/cone-base shapes. `particle-overlay.js`
+progression, and the supported Box, cone-base, and single-sided edge shapes. `particle-overlay.js`
 evaluates the current population without advancing it, then submits each sprite
 to the shared renderer. Rendering a paused frame therefore does not change the
 simulation state.

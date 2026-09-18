@@ -25,14 +25,17 @@ window.CGSSParticleOverlay = (function () {
     const blend = shader?.data?.states?.[0]?.rtBlend0;
     const binding = field => field?.name in floats ? floats[field.name] : field?.val;
     const src = binding(blend?.srcBlend), dst = binding(blend?.destBlend);
-    if (src !== 5 || ![1,10].includes(dst) || binding(blend?.blendOp) !== 0)
+    const supportedBlend = (src === 5 && [1,10].includes(dst)) || (src === 1 && dst === 10);
+    if (!supportedBlend || binding(blend?.blendOp) !== 0)
       throw new Error(`Unsupported particle blend state in ${node.name}: ${src}/${dst}`);
-    const gain = shader.name === 'CommonParticle/Standard/Blend' ? 2 : 1;
-    if (!['CommonParticle/Standard/Blend', 'CommonParticle/TexAlpha/Simple/Blend'].includes(shader.name))
+    const gain = shader.name.startsWith('CommonParticle/Standard/') ? 2 : 1;
+    if (!['CommonParticle/Standard/Blend', 'CommonParticle/TexAlpha/Simple/Blend', 'CommonParticle/Standard/AddtiveMultiply'].includes(shader.name))
       throw new Error(`Unsupported particle shader: ${shader.name}`);
+    const alphaTexture = config.particleImages[alphaId], textureFormat = config.textureFormats?.[textureId];
+    // Standard ETC RGB materials without a companion alpha texture encode coverage in RGB.
+    const maskAlpha = !alphaTexture && textureFormat === 34 && shader.name.startsWith('CommonParticle/Standard/');
     return {id:particleId, gain, serial, name: node.name, system, renderer, materialColor, texture, transforms,
-      alphaTexture: config.particleImages[alphaId], alphaFormat: config.textureFormats?.[alphaId],
-      additive: dst === 1};
+      alphaTexture, alphaFormat: config.textureFormats?.[alphaId], additive: dst === 1, maskAlpha};
   }
   async function create({plan, config}) {
     const {sample, integral, particleScale} = await import('./particle-math.js');
@@ -103,7 +106,7 @@ window.CGSSParticleOverlay = (function () {
             region = {u:(cell%columns)/columns, v:Math.floor(cell/columns)/rows, width:1/columns, height:1/rows};
           }
           backend.drawParticle(image, {x:point.x, y:-point.y, width, height, angle:-angle,
-            region, color, gain:emitter.gain, additive:emitter.additive});
+            region, color, gain:emitter.gain, additive:emitter.additive, maskAlpha:emitter.maskAlpha});
         }
       }
     }

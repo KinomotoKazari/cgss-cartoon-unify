@@ -27,6 +27,9 @@ export function sampleShape(shape, random) {
     direction = {x:Math.cos(angle)*spread/length,y:Math.sin(angle)*spread/length,z:1/length};
   } else if (shape.type === 5) {
     position = {x:random()-.5,y:random()-.5,z:random()-.5};
+  } else if (shape.type === 10) {
+    // SingleSidedEdge emits along its local X edge before shape transforms.
+    position = {x:(random()*2-1)*(shape.radius?.value ?? 1),y:0,z:0};
   } else {
     throw new Error(`Unsupported particle shape ${shape.type}`);
   }

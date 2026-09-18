@@ -11,6 +11,15 @@ export function* references(value) {
   } else for (const child of Object.values(value)) yield* references(child);
 }
 
+function* objectReferences(object, data) {
+  // Billboard, stretched, horizontal, and vertical particle renderers do not use
+  // m_Mesh. Unity commonly points that dormant field at its built-in mesh.
+  for (const [key, value] of Object.entries(data)) {
+    if (object.type === 'ParticleSystemRenderer' && key === 'm_Mesh' && data.m_RenderMode !== 4) continue;
+    yield* references(value);
+  }
+}
+
 export class ObjectResolver {
   constructor(bundle) {
     // Index every serialized object once so PPtr resolution stays constant-time.
@@ -51,7 +60,7 @@ export class ObjectResolver {
       seen.set(object.key, object);
       // Shader bytecode isn't needed by the browser renderer.
       if (object.type === 'Shader') continue;
-      for (const pointer of references(this.data(object))) pending.push(this.resolve(object, pointer));
+      for (const pointer of objectReferences(object, this.data(object))) pending.push(this.resolve(object, pointer));
     }
     return seen;
   }

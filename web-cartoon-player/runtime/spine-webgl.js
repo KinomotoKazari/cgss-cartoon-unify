@@ -16,9 +16,12 @@
     'varying vec4 vColor;' +
     'uniform sampler2D uTex;' +
     'uniform float uParticle;' +
+    'uniform float uParticleMask;' +
     'uniform float uGain;' +
     // Match the canvas compositor's premultiplied alpha.
     'void main(){ vec4 t = texture2D(uTex, vUV);' +
+    'if(uParticle > 0.5 && uParticleMask > 0.5){ float a = max(t.r, max(t.g, t.b)) * vColor.a;' +
+    'vec3 c = clamp(t.rgb * vColor.rgb * uGain, 0.0, 1.0); gl_FragColor = vec4(c, a); return; }' +
     'if(uParticle > 0.5){ vec4 c = clamp(t * vColor * uGain, 0.0, 1.0);' +
     'gl_FragColor = vec4(c.rgb * c.a, c.a); return; }' +
     'float a = t.a * vColor.a;' +
@@ -76,6 +79,7 @@
     this.aColor = gl.getAttribLocation(this.program, 'aColor');
     this.uTex = gl.getUniformLocation(this.program, 'uTex');
     this.uParticle = gl.getUniformLocation(this.program, 'uParticle');
+    this.uParticleMask = gl.getUniformLocation(this.program, 'uParticleMask');
     this.uGain = gl.getUniformLocation(this.program, 'uGain');
 
     this.vbo = gl.createBuffer();
@@ -180,6 +184,7 @@
     gl.blendEquation(gl.FUNC_ADD);
     gl.colorMask(true, true, true, true);
     gl.uniform1f(this.uParticle, 0);
+    gl.uniform1f(this.uParticleMask, 0);
     gl.uniform1f(this.uGain, 1);
 
     var skeletonColor = skeleton.color;
@@ -259,6 +264,7 @@
     gl.blendFunc(gl.ONE, sprite.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
     gl.colorMask(true, true, true, false);
     gl.uniform1f(this.uParticle, 1);
+    gl.uniform1f(this.uParticleMask, sprite.maskAlpha ? 1 : 0);
     gl.uniform1f(this.uGain, sprite.gain);
     var c = Math.cos(sprite.angle), s = Math.sin(sprite.angle);
     var corners = [[-.5,-.5,0,0],[.5,-.5,1,0],[.5,.5,1,1],[-.5,.5,0,1]];

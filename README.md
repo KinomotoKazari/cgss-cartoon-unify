@@ -21,7 +21,7 @@ We built a browser-based bundle player and inspection tool:
 - **Document the rendering model.** We record the asset relationships, the reference game's native playback pipeline as an implementation guide, separate RGB/A8 textures, blending, and the limits of the browser renderer. [Particle and shader analysis](docs/rendering.md) explains the current behaviour and remaining work.
 - **Package it for reuse.** The project includes a Python-launched local preview, a standalone static site, and a bare player entry for embedding. Parsing runs in a Worker, and shared modules keep the two distributions aligned.
 
-## Current Renderer
+## Why the current renderer is different
 
 We compose skeleton groups and particle emitters on one shared WebGL target.
 This lets an effect render before, through, or after character content when its
@@ -145,7 +145,7 @@ The bare player reports loading errors in the browser console. If it appears emp
 
 | Component | Support |
 |---|---|
-| Container | UnityFS 6 and 7 |
+| Container | UnityFS 6, 7, and 8 |
 | Compression | Raw, LZ4, and LZ4HC |
 | Serialized files | Versions 17 and 22 with embedded TypeTrees |
 | Textures | RGB565, Alpha8, ETC_RGB4, RGB24, and RGBA32 |
@@ -191,7 +191,7 @@ We use representative particle and non-particle cards during maintenance. We rep
 
 ## Remaining limits
 
-We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, the two supported particle shader equations, Box and cone-base emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, size curves, and gravity. We submit all scene geometry in render-plan order to one WebGL target. Exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting, camera-bone binding, startup policy, and full 3D billboards remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
+We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, the two supported particle shader equations, Box, cone-base, and single-sided edge emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, size curves, and gravity. We submit all scene geometry in render-plan order to one WebGL target. Exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting, camera-bone binding, startup policy, and full 3D billboards remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
 
 The CGSS skeleton parser supports the custom binary header used by the tested cards. Other skeleton formats and exhaustive malformed-input handling need separate parser work. The current tests do not prove support for every CGSS asset.
 

@@ -38,6 +38,13 @@ function planData(resolver, owner, value) {
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, planData(resolver, owner, child)]));
 }
 
+function renderablePlanData(resolver, object) {
+  const data = object.data;
+  if (object.type !== 'ParticleSystemRenderer' || data.m_RenderMode === 4) return planData(resolver, object, data);
+  const {m_Mesh, ...usedData} = data;
+  return planData(resolver, object, usedData);
+}
+
 export function loadCard(bytes, progress = () => {}) {
   // Extract named Spine resource slots and optional effect prefabs.
   progress('Reading bundle…');
@@ -105,7 +112,7 @@ export function loadCard(bytes, progress = () => {}) {
       continue;
     }
     objects[object.key] = {pathId:object.pathId, type:object.type, name:object.name || '', file:object.file};
-    if (object.data && !['TextAsset','Texture2D'].includes(object.type)) objects[object.key].data = planData(resolver, object, object.data);
+    if (object.data && !['TextAsset','Texture2D'].includes(object.type)) objects[object.key].data = renderablePlanData(resolver, object);
   }
   const summary = {cardId, bundleVersion:bundle.version, files:[...resolver.files.values()].map(file => ({unityVersion:file.unityVersion, version:file.version, objects:file.objects.size})), textureFormats:[...new Set(textures.map(texture => texture.format))]};
   return {cardId, skeletons, atlasText, rgbId:rgb.key, alphaId:alpha.key, textures, plan:{schema:'cgss-card-load-plan/2', cardId, objects, effectPrefabs}, summary};
