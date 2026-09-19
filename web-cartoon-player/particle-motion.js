@@ -1,5 +1,5 @@
 import {sample, rotateShape} from './particle-math.js';
-import {randomSequence} from './particle-simulation.js';
+import {randomSequence, noiseEffects} from './particle-simulation.js';
 
 const axes = ['x','y','z'];
 
@@ -46,6 +46,20 @@ export function sampleShape(shape, random) {
     position = {x:Math.cos(theta)*radius,y:Math.sin(theta)*radius,z:0};
     const length = Math.hypot(spread,1);
     direction = {x:Math.cos(theta)*spread/length,y:Math.sin(theta)*spread/length,z:1/length};
+  } else if (shape.type === 8) {
+    // ConeVolume, not MeshRenderer. Sample the frustum volume so particles
+    // begin throughout its authored length instead of on one narrow path.
+    const baseRadius = Math.max(0,scalar(shape.radius));
+    const height = Math.max(0,shape.length || 0);
+    const slope = Math.tan(shape.angle*Math.PI/180);
+    const endRadius = Math.max(0,baseRadius+slope*height);
+    const sampledRadius = Math.cbrt(baseRadius**3+(endRadius**3-baseRadius**3)*random());
+    const z = Math.abs(slope)>1e-8 ? (sampledRadius-baseRadius)/slope : height*random();
+    const theta = angle(shape,random), radial = sampledRadius*Math.sqrt(random());
+    position = {x:Math.cos(theta)*radial,y:Math.sin(theta)*radial,z};
+    const spread = sampledRadius>1e-8 ? slope*radial/sampledRadius : 0;
+    const norm = Math.hypot(spread,1);
+    direction = {x:Math.cos(theta)*spread/norm,y:Math.sin(theta)*spread/norm,z:1/norm};
   } else if (shape.type === 5) {
     position = {x:random()-.5,y:random()-.5,z:random()-.5};
   } else if (shape.type === 10) {
@@ -61,10 +75,6 @@ export function sampleShape(shape, random) {
     // The sampled bundles provide no Sprite or SpriteRenderer reference. Their
     // authored scale therefore defines the available rectangular emission area.
     position={x:random()-.5,y:random()-.5,z:0};
-  } else if (shape.type === 8 && ['0',0,undefined,null].includes(shape.m_MeshRenderer?.m_PathID)) {
-    // Unity falls back to the emitter origin when a MeshRenderer shape has no
-    // source renderer. Every observed type-8 system uses this serialized form.
-    position={x:0,y:0,z:0};
   } else {
     throw new Error(`Unsupported particle shape ${shape.type}`);
   }
@@ -78,6 +88,9 @@ export function sampleShape(shape, random) {
 // Motion is integrated at simulation ticks, never at browser draw frequency.
 // Local and world displacements stay separate until the hierarchy is applied.
 export function motionHooks(system) {
+  const rotationNoise = system.NoiseModule?.enabled &&
+    (Math.abs(system.NoiseModule.rotationAmount?.scalar || 0) > 1e-12 ||
+      Math.abs(system.NoiseModule.rotationAmount?.minScalar || 0) > 1e-12);
   return {
     initialize(particle) {
       const random = randomSequence(particle.seed);
@@ -99,6 +112,10 @@ export function motionHooks(system) {
         state.position[axis] += (state.velocity[axis]+state.force[axis]+(velocity?.inWorldSpace?0:extra))*modifier*delta;
         state.world[axis] += (state.forceWorld[axis]+(velocity?.inWorldSpace?extra:0))*modifier*delta;
         accumulated[axis] += halfForce;
+      }
+      if (rotationNoise) {
+        state.noiseRotation = (state.noiseRotation || 0) +
+          noiseEffects(system.NoiseModule,state.position,age,particle.lifetime,particle.seed).angularVelocity*delta;
       }
     }
   };

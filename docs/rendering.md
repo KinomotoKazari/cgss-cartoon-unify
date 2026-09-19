@@ -72,33 +72,85 @@ evaluates the current population without advancing it, then submits each sprite
 to the shared renderer. Rendering a paused frame therefore does not change the
 simulation state.
 
-We support these particle material families:
+### Material and blend matrix
 
-- `CommonParticle/Standard/Blend` and `CommonParticle/TexAlpha/Standard/Blend` double the texture, particle, and material color before clamping it.
-- `CommonParticle/Simple/Blend` and `CommonParticle/TexAlpha/Simple/Blend` use the same inputs without doubling them.
-- `CommonParticle/Standard/Multiply` doubles and clamps the inputs, then turns the result into a multiplier before applying the material's `ZERO` / `SRC_COLOR` blend state.
-- `CommonParticle/Standard/AddtiveMultiply` uses doubled RGB and derives alpha from its RGB luminance and `_MultiplyTex` red channel. We use the shader's white default when that texture is not assigned.
+We choose a particle rule from the shader name, the material's blend bindings,
+and the decoded texture formats. The shader name alone does not determine the
+blend mode. We read `_BlendSrc` and `_BlendDst` for each material instance.
 
-We take transparency from the texture when it is present. For `TexAlpha` materials,
-we use the separate Alpha8 mask or the red channel of a color mask. We read each
-material's source and destination blend factors and submit them to WebGL. We
-report an error when a shader or render state has not been covered.
+| Shader family | Fragment calculation | Alpha input | Blend handling |
+|---|---|---|---|
+| `CommonParticle/Standard/Blend` | Doubled and clamped texture × particle × material color | Main texture alpha | Material bindings |
+| `CommonParticle/Simple/Blend` | Texture × particle × material color | Main texture alpha | Material bindings |
+| `CommonParticle/TexAlpha/Standard/Blend` | Doubled and clamped texture × particle × material color | `_AlphaTex` | Material bindings |
+| `CommonParticle/TexAlpha/Simple/Blend` | Texture × particle × material color | `_AlphaTex` | Material bindings |
+| `CommonParticle/Standard/AddtiveMultiply` | Doubled RGB with luminance-derived alpha | `_MultiplyTex` red channel | Material bindings |
+| `CommonParticle/Standard/Multiply` | Doubled and clamped input used as a multiplier | Main texture alpha | `ZERO` / `SRC_COLOR` |
 
-We leave additive ETC particles on their authored alpha path. Their black
-texture pixels already contribute no light, so applying an extra RGB-derived
-alpha mask would make stars and bubbles too faint. We reserve that mask for
-non-additive Standard materials without a separate alpha texture.
+We have checked these material bindings in representative bundles:
+
+| Card effect | Shader family | `_BlendSrc` / `_BlendDst` | Main and mask format | Selected alpha path |
+|---|---|---|---|---|
+| 100108 stars, 201389 bubbles | `Standard/Blend` | 5 / 1 | ETC_RGB4, no mask | Main texture |
+| 100108 sleeve glow | `Standard/AddtiveMultiply` | 5 / 1 | ETC_RGB4, no multiplier texture | RGB luminance with white multiplier |
+| 100108 leaves | `TexAlpha/Simple/Blend` | 5 / 10 | ETC_RGB4 + ETC_RGB4 | Mask red channel |
+| 100281 water splashes | `Simple/Blend` | 5 / 1 | ETC_RGB4, no mask | Main texture |
+| 100398 flower effects | `TexAlpha/Standard/Blend` | 5 / 1 | ETC_RGB4 + ETC_RGB4 | Mask red channel |
+
+We map factor 5 to `SRC_ALPHA`, 1 to `ONE`, and 10 to
+`ONE_MINUS_SRC_ALPHA`. We also support shader bindings that use
+destination factors 5, 6, or 7. `Standard/Multiply` requires 0 / 3, or
+`ZERO` / `SRC_COLOR`. Other factors or unsupported render states fail clearly.
+
+We support main textures in Alpha8 (1), RGB24 (3), RGBA32 (4), RGB565 (7),
+and ETC_RGB4 (34). For `TexAlpha`, we read Alpha8 from its alpha channel and
+other supported mask formats from their red channel. We only combine
+`_AlphaTex` when the selected shader uses it. We only combine `_MultiplyTex`
+for `AddtiveMultiply`. We reject unknown shader names, texture formats, blend
+factors, and render states instead of silently choosing a similar rule.
+
+We mark three cases as approximations. A non-additive Standard material with
+ETC_RGB4 and no separate alpha uses an RGB-derived coverage mask. A different
+non-additive material with an opaque main texture keeps that texture's decoded
+alpha. A `TexAlpha` material without an assigned mask uses white. These paths
+remain visible as `materialConfidence: approximation` on the emitter. We do
+not apply the RGB coverage mask to additive stars or bubbles because their
+black texture pixels already contribute no light.
+
+We derived the fragment calculations from the shader programs stored in the
+bundles. We read blend bindings and texture formats from each bundle's material
+and texture objects. The approximation labels identify behavior that still
+needs visual confirmation.
 
 We keep separate X and Y start sizes when a particle system enables 3D size,
 and we apply the renderer's Billboard pivot. We project X, Y, and Z particle
 rotation for tilted Billboard effects. This restores the authored tilt in effects
 such as floor light patterns while retaining the preview's orthographic camera.
 
+We treat Shape type 8 as ConeVolume. We sample birth positions throughout its
+authored length and angle. This gives sleeve and other volume emitters a spread
+at birth rather than collapsing them to the emitter centre. The exact Unity
+sampling distribution still needs a visual comparison.
+
+We apply the bundle's Noise settings to particle position, size, and rotation.
+We evaluate size against the same deterministic field used for position. We
+integrate rotation during fixed simulation ticks, so browser frame partitioning
+does not change its accumulated angle. The field and its channel mapping are
+approximations, not a claim of exact Unity output.
+We retain `NoiseModule.quality` in the parsed scene data, but the substitute
+field does not yet reproduce its sampling behavior. We list it separately in
+the local coverage report.
+
+We found five Unity version labels across the 1,566-card check: 2018.3.8f1
+(734 cards), 2018.4.27f1 (144), 2020.3.8f1 (577), 2022.3.37f1 (29), and
+2022.3.40f1 (82). We keep each bundle's version in the load plan. We do not
+assume that one measured Noise sequence would apply to every version.
+
 ## Known limits
 
 The following are outside the current browser model:
 
-- Exact random/noise kernels, noise-driven size and rotation, and camera-specific 3D Billboard perspective.
+- Exact random/noise kernels, version-specific Noise behavior, and camera-specific 3D Billboard perspective.
 - Mesh particle layouts other than the embedded Float32 geometry and the observed Unity default Quad. We rotate these in 3D and project them into the 2D preview. We leave other layouts out instead of presenting their texture as a billboard.
 - Burst emission, rate over distance, trails, collision, sub-emitters, and external force fields.
 - Camera-bone binding, startup simulation policy, runtime scale compensation, clipping timing, soft particles, and post-processing.

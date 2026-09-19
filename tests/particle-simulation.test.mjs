@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {ParticleSimulation,noiseOffset} from '../web/particle-simulation.js';
+import {ParticleSimulation,noiseEffects,noiseOffset} from '../web/particle-simulation.js';
 import {integral} from '../web/particle-math.js';
+import {motionHooks} from '../web/particle-motion.js';
 
 const constant=scalar=>({minMaxState:0,scalar,minScalar:999});
 function system(rate=2) {
@@ -37,4 +38,27 @@ test('noise is deterministic and disabled modules contribute no offset',()=>{
   assert.notDeepEqual(noiseOffset(module,p,2,10,127),noiseOffset(module,p,3,10,127));
   assert.deepEqual(noiseOffset({enabled:false},p,2,10,127),{x:0,y:0,z:0});
   assert.equal(integral(constant(.5),0,2,10,true),1);
+});
+test('noise size and rotation work without position noise and remain tick-stable',()=>{
+  const module={enabled:true,strength:constant(1),frequency:.8,octaves:1,octaveMultiplier:.5,
+    octaveScale:2,scrollSpeed:constant(.2),positionAmount:constant(0),sizeAmount:constant(1),
+    rotationAmount:constant(90)};
+  const effect=noiseEffects(module,{x:1,y:2,z:3},1,10,127);
+  assert.deepEqual(effect.offset,{x:0,y:0,z:0});
+  assert.notEqual(effect.sizeScale,1);
+  assert.notEqual(effect.angularVelocity,0);
+  assert.deepEqual(noiseEffects(module,{x:1,y:2,z:3},1,10,127),effect);
+  assert.deepEqual(noiseEffects({enabled:false},{x:1,y:2,z:3},1,10,127),
+    {offset:{x:0,y:0,z:0},sizeScale:1,angularVelocity:0});
+  const data=system(2);
+  data.InitialModule.startSpeed=constant(0);
+  data.InitialModule.startLifetime=constant(10);
+  data.ShapeModule={enabled:false};
+  data.NoiseModule=module;
+  const a=new ParticleSimulation(data,1,motionHooks(data));
+  const b=new ParticleSimulation(data,1,motionHooks(data));
+  a.advance(2);
+  for(let i=0;i<120;i++) b.advance(1/60);
+  assert.deepEqual(a.particles.map(p=>p.motion.noiseRotation),b.particles.map(p=>p.motion.noiseRotation));
+  assert.ok(a.particles.some(p=>p.motion.noiseRotation!==0));
 });

@@ -7,7 +7,7 @@ window.CGSSParticleOverlay = (function () {
     {x:0.5,y:-0.5,z:0,u:1,v:1}, {x:-0.5,y:-0.5,z:0,u:0,v:1}
   ], indices:[0,1,2,0,2,3]};
   function seeded(value) { let n = value >>> 0; return () => ((n = (n * 1664525 + 1013904223) >>> 0) / 4294967296); }
-  function makeEmitter(plan, config, node, particleId, serial, particleMaterialState, needsRgbAlphaMask) {
+  function makeEmitter(plan, config, node, particleId, serial, resolveParticleMaterial) {
     // Resolve the ParticleSystem, its material texture, and the transform chain once.
     const system = object(plan, particleId).data;
     if (!node.active || !system.EmissionModule.enabled) return null;
@@ -34,24 +34,36 @@ window.CGSSParticleOverlay = (function () {
     const alphaId = pairs(properties.m_TexEnvs)._AlphaTex?.m_Texture.m_PathID;
     const multiplyId = pairs(properties.m_TexEnvs)._MultiplyTex?.m_Texture.m_PathID;
     const shader = object(plan,material.m_Shader.m_PathID);
-    const {gain, multiply, lumaAlpha, src, dst, colorMask} = particleMaterialState(shader, material);
-    const alphaTexture = config.particleImages[alphaId], textureFormat = config.textureFormats?.[textureId];
-    // Standard ETC RGB materials without a companion alpha texture encode coverage in RGB.
-    const maskAlpha = needsRgbAlphaMask(shader, {multiply,lumaAlpha,dst}, textureFormat, !!alphaTexture);
+    let binding;
+    try {
+      binding = resolveParticleMaterial(shader, material, {
+        mainFormat:config.textureFormats?.[textureId],
+        alphaFormat:config.textureFormats?.[alphaId], alphaAssigned:!!alphaId && alphaId !== '0',
+        hasAlphaTexture:!!config.particleImages[alphaId],
+        multiplyFormat:config.textureFormats?.[multiplyId], multiplyAssigned:!!multiplyId && multiplyId !== '0',
+        hasMultiplyTexture:!!config.particleImages[multiplyId]
+      });
+    } catch (error) {
+      throw new Error(`Particle ${node.name}: ${error.message}`, {cause:error});
+    }
+    const {gain, multiply, lumaAlpha, src, dst, colorMask, maskAlpha} = binding;
     return {id:particleId, gain, serial, name: node.name, system, renderer, materialColor, texture, transforms,
-      alphaTexture, alphaFormat: config.textureFormats?.[alphaId], multiplyTexture:config.particleImages[multiplyId],
+      alphaTexture:binding.usesAlphaTexture ? config.particleImages[alphaId] : null,
+      alphaFormat:config.textureFormats?.[alphaId],
+      multiplyTexture:binding.usesMultiplyTexture ? config.particleImages[multiplyId] : null,
+      alphaSource:binding.alphaSource, materialConfidence:binding.confidence,
       blendSrc:src, blendDst:dst, multiply, lumaAlpha, maskAlpha, colorMask, mesh};
   }
   async function create({plan, config}) {
     const {sample, integral, particleScale, stretchedBillboard} = await import('./particle-math.js');
-    const {ParticleSimulation, noiseOffset} = await import('./particle-simulation.js');
+    const {ParticleSimulation, noiseEffects} = await import('./particle-simulation.js');
     const {motionHooks, transformPoint} = await import('./particle-motion.js');
-    const {particleMaterialState, needsRgbAlphaMask} = await import('./particle-material.js');
+    const {resolveParticleMaterial} = await import('./particle-material.js');
     const place = (emitter,point) => emitter.transforms.reduce((p,t)=>transformPoint(p,t),point);
     const {sampleColor, multiplyColors} = await import('./particle-color.js');
     // Automatic seeds are fresh per load; authored seeds remain owned by the simulation.
     const nodes = plan.effectPrefabs.flatMap((prefab) => prefab.nodes);
-    const emitters = nodes.flatMap((node, serial) => node.componentIds.filter((id) => object(plan, id).type === 'ParticleSystem').map((id) => makeEmitter(plan, config, node, id, serial, particleMaterialState, needsRgbAlphaMask))).filter(Boolean);
+    const emitters = nodes.flatMap((node, serial) => node.componentIds.filter((id) => object(plan, id).type === 'ParticleSystem').map((id) => makeEmitter(plan, config, node, id, serial, resolveParticleMaterial))).filter(Boolean);
     // Preserve discovery order here. Cross-object ordering belongs to the render plan.
     for (const emitter of emitters) emitter.simulation = new ParticleSimulation(emitter.system, crypto.getRandomValues(new Uint32Array(1))[0], motionHooks(emitter.system));
     // The bundle stores a multiplier, not Physics.gravity. Callers may override it.
@@ -102,7 +114,8 @@ window.CGSSParticleOverlay = (function () {
           const seed = seeded(particle.seed);
           const lifetime = particle.lifetime, age = emitter.simulation.time-particle.birth;
           const local = {...particle.motion.position};
-          const perturbation=noiseOffset(ps.NoiseModule,local,age,lifetime,particle.seed);
+          const noise=noiseEffects(ps.NoiseModule,local,age,lifetime,particle.seed);
+          const perturbation=noise.offset;
           local.x+=perturbation.x; local.y+=perturbation.y; local.z+=perturbation.z;
           const point = place(emitter, local), startSizeRandom=seed();
           const size = sample(initial.startSize, startSizeRandom, particle.phase);
@@ -116,8 +129,9 @@ window.CGSSParticleOverlay = (function () {
           const sizeRandom=seed(), sizeModule=ps.SizeModule;
           const sx=sizeModule.enabled?sample(sizeModule.curve,sizeRandom,normalizedAge):1;
           const sy=sizeModule.enabled && sizeModule.separateAxes?sample(sizeModule.y,sizeRandom,normalizedAge):sx;
-          const width = Math.max(0,size*sx*scale.x), height=Math.max(0,sizeY*sy*scale.y);
+          const width = Math.max(0,size*sx*scale.x*noise.sizeScale), height=Math.max(0,sizeY*sy*scale.y*noise.sizeScale);
           const rotation = {x:0, y:0, z:sample(initial.startRotation,seed(),particle.phase)};
+          rotation.z += particle.motion.noiseRotation || 0;
           if (initial.rotation3D) {
             rotation.x=sample(initial.startRotationX,seed(),particle.phase);
             rotation.y=sample(initial.startRotationY,seed(),particle.phase);

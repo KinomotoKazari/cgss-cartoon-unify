@@ -88,13 +88,14 @@ function noise(x, y, z, seed) {
   return value;
 }
 
-export function noiseOffset(module, position, age, lifetime, seed) {
-  const out = {x:0, y:0, z:0};
-  if (!module?.enabled) return out;
+export function noiseEffects(module, position, age, lifetime, seed) {
+  const offset = {x:0, y:0, z:0};
+  if (!module?.enabled) return {offset, sizeScale:1, angularVelocity:0};
   const t = age / lifetime;
   const random = randomSequence(seed);
   const scroll = sample(module.scrollSpeed, random(), t) * age;
   const baseFrequency = Math.max(0.0001, module.frequency || 0.0001);
+  const field = {x:0, y:0, z:0};
   for (const [index, axis] of ['x', 'y', 'z'].entries()) {
     let amplitude = 1, frequency = baseFrequency, value = 0;
     for (let octave = 0; octave < Math.max(1, module.octaves); octave++) {
@@ -105,7 +106,19 @@ export function noiseOffset(module, position, age, lifetime, seed) {
     }
     if (module.remapEnabled) value = sample(module[axis === 'x' ? 'remap' : `remap${axis.toUpperCase()}`], random(), (value + 1) / 2) * 2 - 1;
     const strength = sample(module.separateAxes && axis !== 'x' ? module[`strength${axis.toUpperCase()}`] : module.strength, random(), t);
-    out[axis] = value * strength * sample(module.positionAmount, random(), t) / (module.damping ? baseFrequency : 1);
+    field[axis] = value * strength / (module.damping ? baseFrequency : 1);
+    const positionAmount = sample(module.positionAmount, random(), t);
+    offset[axis] = positionAmount === 0 ? 0 : field[axis] * positionAmount;
   }
-  return out;
+  // The same authored noise settings affect position, size, and rotation.
+  // The field is deterministic, but its kernel and channel mapping are an approximation.
+  const sizeRandom = randomSequence(seed ^ 0x537a1e)();
+  const rotationRandom = randomSequence(seed ^ 0x726f7461)();
+  const sizeScale = Math.max(0, 1 + field.x * sample(module.sizeAmount, sizeRandom, t));
+  const angularVelocity = field.z * sample(module.rotationAmount, rotationRandom, t) * Math.PI / 180;
+  return {offset, sizeScale, angularVelocity};
+}
+
+export function noiseOffset(module, position, age, lifetime, seed) {
+  return noiseEffects(module, position, age, lifetime, seed).offset;
 }

@@ -51,23 +51,28 @@ particle order behind the character while a later effect stays in front. We keep
 the existing file selector, controls, standalone player, bare player, and
 emitter inspector on top of this rendering path.
 
+We select particle material behavior from the bundled shader, each material's
+blend bindings, and its texture formats. The [material and blend matrix](docs/rendering.md#material-and-blend-matrix)
+shows the supported paths and labels the remaining approximations.
+
 ## Compatibility work
 
 We ran a static bundle and particle-property coverage check across **1566 card bundles**.
-All 1,566 loaded in that check. We use the results and visual comparisons to keep
+All 1566 loaded in that check. We use the results and visual comparisons to keep
 improving material handling, particle placement, and animation playback. This
 check does not mean every card has been visually verified or that every effect
 already matches the game.
 
 ### Recent card fixes
 
-We chose these four representative cards because they expose different issues
+We chose these representative cards because they expose different issues
 in shared playback behavior:
 
-- **100108:** We updated the sleeve light effect to use its material's luminance-based alpha instead of presenting it as a dark, smoky trail.
+- **100108:** We updated the sleeve light effect to use its material's luminance-based alpha and stopped dimming its additive stars with an extra RGB mask. We now sample its ConeVolume birth shape across the authored length, which lets the stars spread instead of starting on one path. We also approximate Noise-driven size. Orbital motion remains under review.
 - **100281:** We now apply separate particle width and height and the renderer pivot to better place the water splashes around the character.
 - **100398:** We now apply X and Y particle rotation so the cherry-blossom light pattern can tilt across the stage floor.
 - **200674:** We fixed UTF-8 attachment-name decoding so the skeleton can find its matching atlas regions.
+- **201389:** We stopped applying the extra RGB alpha mask to additive bubbles, restoring their intended visibility.
 
 We added targeted checks for these behaviors. We still rely on visual review to
 judge how closely each effect matches the game's presentation.
@@ -213,7 +218,7 @@ We use representative particle and non-particle cards during maintenance. We rep
 
 ## Remaining limits
 
-We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, supported Simple, Standard, TexAlpha, and Multiply particle materials, Box, cone-base, and single-sided edge emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, size curves, and gravity. We submit all scene geometry in render-plan order to one WebGL target. We use embedded Float32 mesh geometry and the observed Unity default Quad when a particle renderer supplies them. We also keep distinct X/Y particle sizes, Billboard pivots, and X/Y/Z rotation when projecting tilted effects into the card preview. We leave unsupported mesh layouts out rather than drawing a misleading full-frame texture. Exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting, camera-bone binding, startup policy, and camera-specific 3D projection remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
+We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, supported Simple, Standard, TexAlpha, and Multiply particle materials, Box, cone-base, and single-sided edge emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, size curves, and gravity. We submit all scene geometry in render-plan order to one WebGL target. We use embedded Float32 mesh geometry and the observed Unity default Quad when a particle renderer supplies them. We also keep distinct X/Y particle sizes, Billboard pivots, and X/Y/Z rotation when projecting tilted effects into the card preview. We leave unsupported mesh layouts out rather than drawing a misleading full-frame texture. We use one deterministic approximation for Noise-driven position, size, and rotation across the Unity versions in the tested bundles. Exact random/noise kernels, camera-dependent sorting, camera-bone binding, startup policy, and camera-specific 3D projection remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
 
 The CGSS skeleton parser supports the custom binary header used by the tested cards. Other skeleton formats and exhaustive malformed-input handling need separate parser work. The current tests do not prove support for every CGSS asset.
 

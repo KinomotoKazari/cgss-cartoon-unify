@@ -33,13 +33,24 @@ test('box shell emits on a transformed box surface',()=>{
   assert.deepEqual(sample.direction,{x:0,y:0,z:1});
 });
 
-test('sphere, circle, donut, rectangle, and empty renderer shapes have stable samples',()=>{
+test('cone volume births occupy its authored length and spread across its radius',()=>{
+  const shape={enabled:true,type:8,angle:20,length:8,radius:{value:.2},arc:{value:360},
+    m_Position:{x:0,y:0,z:0},m_Rotation:{},m_Scale:{x:1,y:1,z:1}};
+  const random=randomSequence(100108);
+  const points=Array.from({length:1000},()=>sampleShape(shape,random));
+  const xs=points.map(item=>item.position.x), ys=points.map(item=>item.position.y);
+  assert.ok(points.every(item=>item.position.z>=0 && item.position.z<=8));
+  assert.ok(Math.max(...xs)-Math.min(...xs)>2);
+  assert.ok(Math.max(...ys)-Math.min(...ys)>2);
+  assert.ok(points.every(item=>Math.abs(Math.hypot(...Object.values(item.direction))-1)<1e-12));
+});
+
+test('sphere, circle, donut, and rectangle shapes have stable samples',()=>{
   const base={enabled:true,m_Position:{x:0,y:0,z:0},m_Rotation:{},m_Scale:{x:1,y:1,z:1},radius:{value:2},radiusThickness:1,arc:{value:360}};
   assert.ok(Math.hypot(...Object.values(sampleShape({...base,type:0},()=>.5).position))<=2);
   assert.ok(Math.abs(sampleShape({...base,type:12},()=>.5).position.y)<1e-12);
   assert.ok(Number.isFinite(sampleShape({...base,type:15,donutRadius:.2},()=>.5).position.x));
   assert.deepEqual(sampleShape({...base,type:16},()=>.5).position,{x:0,y:0,z:0});
-  assert.deepEqual(sampleShape({...base,type:8,m_MeshRenderer:{m_PathID:'0'}},()=>.5).position,{x:0,y:0,z:0});
 });
 
 test('force integrates acceleration and speedModifier scales initial velocity too',()=>{

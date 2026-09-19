@@ -141,5 +141,5 @@ export function loadCard(bytes, progress = () => {}) {
     if (object.data && !['TextAsset','Texture2D'].includes(object.type)) objects[object.key].data = renderablePlanData(resolver, object, objects);
   }
   const summary = {cardId, bundleVersion:bundle.version, files:[...resolver.files.values()].map(file => ({unityVersion:file.unityVersion, version:file.version, objects:file.objects.size})), textureFormats:[...new Set(textures.map(texture => texture.format))]};
-  return {cardId, skeletons, atlasText, rgbId:rgb.key, alphaId:alpha.key, textures, plan:{schema:'cgss-card-load-plan/2', cardId, objects, effectPrefabs}, summary};
+  return {cardId, skeletons, atlasText, rgbId:rgb.key, alphaId:alpha.key, textures, plan:{schema:'cgss-card-load-plan/2', cardId, unityVersion:bundle.unityVersion, objects, effectPrefabs}, summary};
 }
