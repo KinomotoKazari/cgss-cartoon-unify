@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {particleMaterialState} from '../web/particle-material.js';
+import {particleMaterialState, needsRgbAlphaMask} from '../web/particle-material.js';
 
 function fixture(name, src, dst) {
   return {
@@ -31,6 +31,14 @@ test('less common Simple blend factors remain distinct', () => {
     const {shader,material} = fixture('CommonParticle/Simple/Blend',5,dst);
     assert.equal(particleMaterialState(shader,material).dst,dst);
   }
+});
+
+test('additive ETC particles do not lose opacity to a second RGB mask', () => {
+  const {shader,material} = fixture('CommonParticle/Standard/Blend',5,1);
+  const state = particleMaterialState(shader,material);
+  assert.equal(needsRgbAlphaMask(shader,state,34,false),false);
+  assert.equal(needsRgbAlphaMask(shader,{...state,dst:10},34,false),true);
+  assert.equal(needsRgbAlphaMask(shader,{...state,dst:10},34,true),false);
 });
 
 test('unverified shader states fail explicitly', () => {

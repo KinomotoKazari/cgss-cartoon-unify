@@ -23,3 +23,10 @@ export function particleMaterialState(shader, material) {
     throw new Error(`Unsupported particle render state for ${shader.name}`);
   return {gain:mode.gain, multiply:!!mode.multiply, lumaAlpha:!!mode.lumaAlpha, src, dst, colorMask};
 }
+
+export function needsRgbAlphaMask(shader, state, textureFormat, hasAlphaTexture) {
+  // Additive blends already discard black texels through their RGB output.
+  // Reusing RGB as alpha there attenuates the effect a second time.
+  return !state.multiply && !state.lumaAlpha && state.dst !== 1 && !hasAlphaTexture
+    && textureFormat === 34 && shader.name.startsWith('CommonParticle/Standard/');
+}

@@ -84,6 +84,11 @@ we use the separate Alpha8 mask or the red channel of a color mask. We read each
 material's source and destination blend factors and submit them to WebGL. We
 report an error when a shader or render state has not been covered.
 
+We leave additive ETC particles on their authored alpha path. Their black
+texture pixels already contribute no light, so applying an extra RGB-derived
+alpha mask would make stars and bubbles too faint. We reserve that mask for
+non-additive Standard materials without a separate alpha texture.
+
 We keep separate X and Y start sizes when a particle system enables 3D size,
 and we apply the renderer's Billboard pivot. We project X, Y, and Z particle
 rotation for tilted Billboard effects. This restores the authored tilt in effects
