@@ -26,13 +26,20 @@ test('cone births occupy the base disk, with outward unit directions',()=>{
   assert.ok(Math.abs(radiusSquared/2000-2)<.1);
 });
 
-test('single-sided edge uses its full local X extent before shape transforms',()=>{
-  const shape={enabled:true,type:10,radius:{value:2},m_Position:{x:3,y:4,z:5},
-    m_Rotation:{},m_Scale:{x:10,y:20,z:30}};
-  const left=sampleShape(shape,()=>0),right=sampleShape(shape,()=>1);
-  assert.deepEqual(left.position,{x:-17,y:4,z:5});
-  assert.deepEqual(right.position,{x:23,y:4,z:5});
-  assert.deepEqual(left.direction,{x:0,y:0,z:1});
+test('box shell emits on a transformed box surface',()=>{
+  const shape={enabled:true,type:10,m_Position:{x:3,y:4,z:5},m_Rotation:{},m_Scale:{x:10,y:20,z:30}};
+  const sample=sampleShape(shape,()=>0);
+  assert.deepEqual(sample.position,{x:-2,y:-6,z:-10});
+  assert.deepEqual(sample.direction,{x:0,y:0,z:1});
+});
+
+test('sphere, circle, donut, rectangle, and empty renderer shapes have stable samples',()=>{
+  const base={enabled:true,m_Position:{x:0,y:0,z:0},m_Rotation:{},m_Scale:{x:1,y:1,z:1},radius:{value:2},radiusThickness:1,arc:{value:360}};
+  assert.ok(Math.hypot(...Object.values(sampleShape({...base,type:0},()=>.5).position))<=2);
+  assert.ok(Math.abs(sampleShape({...base,type:12},()=>.5).position.y)<1e-12);
+  assert.ok(Number.isFinite(sampleShape({...base,type:15,donutRadius:.2},()=>.5).position.x));
+  assert.deepEqual(sampleShape({...base,type:16},()=>.5).position,{x:0,y:0,z:0});
+  assert.deepEqual(sampleShape({...base,type:8,m_MeshRenderer:{m_PathID:'0'}},()=>.5).position,{x:0,y:0,z:0});
 });
 
 test('force integrates acceleration and speedModifier scales initial velocity too',()=>{

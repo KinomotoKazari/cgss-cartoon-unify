@@ -1,5 +1,6 @@
 // CardCartoon runtime boundary. The page UI talks to this through the viewer facade.
 import {createRenderPlan} from './render-plan.js';
+import {createDeferredStateQueue} from './deferred-state.js';
 
 export function createSceneRuntime({skeletons, particles, renderer, context, glCanvas, fit, getSpeed = () => 1,
   clock = {now:() => performance.now(), request:cb => requestAnimationFrame(cb), cancel:id => cancelAnimationFrame(id)}}) {
@@ -8,18 +9,26 @@ export function createSceneRuntime({skeletons, particles, renderer, context, glC
   let playing = true;
   let previous = clock.now();
   const plan = createRenderPlan(skeletons, particles.emitters);
+  const deferredStates = createDeferredStateQueue();
 
   function update(delta) {
     for (const item of skeletons) {
       item.state.update(delta);
-      item.state.apply(item.skeleton);
-      item.skeleton.updateWorldTransform();
+      deferredStates.mark(item);
     }
     if (delta > 0) particles.advance(delta);
   }
 
+  function flushStateUpdates() {
+    deferredStates.flush(item => {
+      item.state.apply(item.skeleton);
+      item.skeleton.updateWorldTransform();
+    });
+  }
+
   function render() {
     if (disposed) return;
+    flushStateUpdates();
     renderer.setTransform(fit.scale, fit.tx, fit.ty);
     renderer.clear(.2, .2, .2, 1);
     for (const group of plan.groups) {
@@ -69,6 +78,6 @@ export function createSceneRuntime({skeletons, particles, renderer, context, glC
     diagnostics:plan.diagnostics,
     play() { if (disposed || playing) return; playing = true; previous = clock.now(); particles.resume(); frameId = clock.request(tick); },
     pause() { if (disposed || !playing) return; playing = false; cancelFrame(); particles.pause(); },
-    dispose() { if (disposed) return; disposed = true; playing = false; cancelFrame(); try { particles.dispose(); } finally { renderer.dispose(); } }
+    dispose() { if (disposed) return; disposed = true; playing = false; cancelFrame(); deferredStates.clear(); try { particles.dispose(); } finally { renderer.dispose(); } }
   };
 }

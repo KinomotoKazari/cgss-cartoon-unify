@@ -1,8 +1,9 @@
 import {readBundle} from './bundle-reader.js';
 import {ObjectResolver, pairs} from './object-resolver.js';
 import {decodeTexture} from './texture-decoder.js';
+import {particleMesh, builtInParticleMesh} from './particle-mesh.js';
 
-const slots = ['bg', 'eff2', 'chara', 'fg', 'eff1'];
+const slots = ['bg', 'eff2', 'eff3', 'chara', 'fg', 'eff1'];
 const textDecoder = new TextDecoder();
 
 function hierarchy(resolver, root) {
@@ -38,11 +39,35 @@ function planData(resolver, owner, value) {
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, planData(resolver, owner, child)]));
 }
 
-function renderablePlanData(resolver, object) {
+function renderablePlanData(resolver, object, objects) {
   const data = object.data;
-  if (object.type !== 'ParticleSystemRenderer' || data.m_RenderMode === 4) return planData(resolver, object, data);
+  if (object.classId === 43) return {particleMesh:particleMesh(data)};
+  if (object.type === 'Material') {
+    const shader = data.m_Shader, file = resolver.files.get(object.file);
+    const target = shader?.m_FileID ? file.externals[shader.m_FileID - 1]?.toLowerCase() : '';
+    if (['library/unity default resources', 'resources/unity_builtin_extra'].includes(target)) {
+      // The browser uses material texture properties and cannot load Unity's built-in shader objects.
+      const {m_Shader, ...usedData} = data;
+      return planData(resolver, object, usedData);
+    }
+  }
+  if (object.type !== 'ParticleSystemRenderer') return planData(resolver, object, data);
   const {m_Mesh, ...usedData} = data;
-  return planData(resolver, object, usedData);
+  const result = planData(resolver, object, usedData);
+  if (data.m_RenderMode !== 4 || !m_Mesh || String(m_Mesh.m_PathID) === '0') return result;
+  if (m_Mesh.m_FileID) {
+    const file = resolver.files.get(object.file);
+    const target = file.externals[m_Mesh.m_FileID - 1]?.toLowerCase();
+    const mesh = target === 'library/unity default resources' ? builtInParticleMesh(m_Mesh.m_PathID) : null;
+    if (!mesh) throw new Error(`Unsupported external particle mesh: ${target || m_Mesh.m_FileID}:${m_Mesh.m_PathID}`);
+    const key = `builtin:unity-default:${m_Mesh.m_PathID}`;
+    objects[key] ??= {pathId:key, type:'Mesh', name:'Unity Quad', data:{particleMesh:mesh}};
+    result.m_Mesh = {m_FileID:0, m_PathID:key};
+    return result;
+  }
+  const mesh = resolver.resolve(object, m_Mesh);
+  if (mesh?.classId === 43) result.m_Mesh = planData(resolver, object, m_Mesh);
+  return result;
 }
 
 export function loadCard(bytes, progress = () => {}) {
@@ -67,11 +92,12 @@ export function loadCard(bytes, progress = () => {}) {
       const data = resolver.data(object);
       if (!data.skeletonJSON) continue;
       const skeleton = resolver.resolve(object, data.skeletonJSON), skeletonData = resolver.data(skeleton);
-      const match = skeletonData.m_Name.match(/_(bg|eff2|chara|eff1|fg)\.skel(?:\.asset)?$/i);
+      const match = skeletonData.m_Name.match(/_(bg|eff1|eff2|eff3|chara|fg)(\d*)\.skel(?:\.asset)?$/i);
       if (!match) throw new Error(`Unknown card skeleton layer: ${skeletonData.m_Name}`);
-      const layer = match[1].toLowerCase();
-      if (skeletons.some(item => item.layer === layer)) throw new Error(`Duplicate ${layer} skeleton`);
-      skeletons.push({layer, name:skeletonData.m_Name, bytes:skeletonData.m_Script.slice(), scale:data.scale, defaultMix:data.defaultMix});
+      const slot = match[1].toLowerCase(), suffix = match[2] || '';
+      let layer = slot + suffix, duplicate = 2;
+      while (skeletons.some(item => item.layer === layer)) layer = `${slot}${duplicate++}`;
+      skeletons.push({layer, slot, name:skeletonData.m_Name, bytes:skeletonData.m_Script.slice(), scale:data.scale, defaultMix:data.defaultMix});
       roots.push(object);
       for (const pointer of data.atlasAssets) { const atlas = resolver.resolve(object, pointer); if (atlas) atlases.set(atlas.key, atlas); }
     } else if (object.type === 'GameObject') {
@@ -85,7 +111,7 @@ export function loadCard(bytes, progress = () => {}) {
   }
   if (!skeletons.length) throw new Error('Card has no supported Spine skeletons');
   if (atlases.size !== 1) throw new Error('This preview supports one shared Spine atlas');
-  skeletons.sort((a,b) => slots.indexOf(a.layer) - slots.indexOf(b.layer));
+  skeletons.sort((a,b) => slots.indexOf(a.slot) - slots.indexOf(b.slot));
   const atlasObject = [...atlases.values()][0], atlasData = resolver.data(atlasObject);
   if (atlasData.materials.length !== 1) throw new Error('Multi-page Spine atlases are not yet supported');
   const atlasText = textDecoder.decode(resolver.data(resolver.resolve(atlasObject, atlasData.atlasFile)).m_Script);
@@ -112,7 +138,7 @@ export function loadCard(bytes, progress = () => {}) {
       continue;
     }
     objects[object.key] = {pathId:object.pathId, type:object.type, name:object.name || '', file:object.file};
-    if (object.data && !['TextAsset','Texture2D'].includes(object.type)) objects[object.key].data = renderablePlanData(resolver, object);
+    if (object.data && !['TextAsset','Texture2D'].includes(object.type)) objects[object.key].data = renderablePlanData(resolver, object, objects);
   }
   const summary = {cardId, bundleVersion:bundle.version, files:[...resolver.files.values()].map(file => ({unityVersion:file.unityVersion, version:file.version, objects:file.objects.size})), textureFormats:[...new Set(textures.map(texture => texture.format))]};
   return {cardId, skeletons, atlasText, rgbId:rgb.key, alphaId:alpha.key, textures, plan:{schema:'cgss-card-load-plan/2', cardId, objects, effectPrefabs}, summary};

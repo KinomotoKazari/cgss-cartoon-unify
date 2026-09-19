@@ -51,6 +51,27 @@ particle order behind the character while a later effect stays in front. We keep
 the existing file selector, controls, standalone player, bare player, and
 emitter inspector on top of this rendering path.
 
+## Compatibility work
+
+We ran a static bundle and particle-property coverage check across **1566 card bundles**.
+All 1,566 loaded in that check. We use the results and visual comparisons to keep
+improving material handling, particle placement, and animation playback. This
+check does not mean every card has been visually verified or that every effect
+already matches the game.
+
+### Recent card fixes
+
+We chose these four representative cards because they expose different issues
+in shared playback behavior:
+
+- **100108:** We updated the sleeve light effect to use its material's luminance-based alpha instead of presenting it as a dark, smoky trail.
+- **100281:** We now apply separate particle width and height and the renderer pivot to better place the water splashes around the character.
+- **100398:** We now apply X and Y particle rotation so the cherry-blossom light pattern can tilt across the stage floor.
+- **200674:** We fixed UTF-8 attachment-name decoding so the skeleton can find its matching atlas regions.
+
+We added targeted checks for these behaviors. We still rely on visual review to
+judge how closely each effect matches the game's presentation.
+
 ## Screenshots and animation
 
 These captures come from the standalone player. The card preview screenshot uses **300599 — 赤城みりあ「一夜の魔法」**. The animation and particle inspector captures use **201389 — 佐城雪美「あなたに微笑むマドモアゼル」**. They show this project's rendering, including its current particle approximation.
@@ -97,7 +118,7 @@ From the repository root, run:
 python run.py
 ```
 
-The page opens automatically. Choose a `card_cartoon_*.unity3d` file, then select **Load card**. **Pause**, **Play**, and **Speed** control playback. Keep the terminal open while the page is in use. Press Ctrl+C to stop the server.
+The page opens automatically. Choose a `card_cartoon_*.unity3d` file, then select **Load card**. **Pause**, **Play**, and **Speed** control playback. We use 1.0 as the viewer's default playback multiplier. The bundle supplies animation timing and individual particle simulation speeds, but we have not established that 1.0 always matches the game's presentation speed. Keep the terminal open while the page is in use. Press Ctrl+C to stop the server.
 
 The separate emitter-position diagnostic is available at `http://127.0.0.1:<port>/emitter_debug.html`, using the port printed by `run.py`.
 
@@ -181,6 +202,7 @@ We use representative particle and non-particle cards during maintenance. We rep
 | `web/viewer.js` | Compatibility facade for the runtime and inspector |
 | `web/scene-runtime.js` | Own playback clock, state updates, presentation, and disposal |
 | `web/particle-overlay.js` | Resolve particle materials and draw the current particle population |
+| `web/particle-material.js` | Read supported particle shader and blend states |
 | `web/particle-motion.js` | Sample emitter shapes and integrate force/velocity |
 | `web/particle-color.js` | Evaluate gradients and particle fragment colors |
 | `web/particle-simulation.js` | Schedule births, deaths, prewarm and fixed ticks |
@@ -191,15 +213,13 @@ We use representative particle and non-particle cards during maintenance. We rep
 
 ## Remaining limits
 
-We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, the two supported particle shader equations, Box, cone-base, and single-sided edge emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, size curves, and gravity. We submit all scene geometry in render-plan order to one WebGL target. Exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting, camera-bone binding, startup policy, and full 3D billboards remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
+We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, supported Simple, Standard, TexAlpha, and Multiply particle materials, Box, cone-base, and single-sided edge emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, size curves, and gravity. We submit all scene geometry in render-plan order to one WebGL target. We use embedded Float32 mesh geometry and the observed Unity default Quad when a particle renderer supplies them. We also keep distinct X/Y particle sizes, Billboard pivots, and X/Y/Z rotation when projecting tilted effects into the card preview. We leave unsupported mesh layouts out rather than drawing a misleading full-frame texture. Exact random/noise kernels, noise-driven size/rotation, camera-dependent sorting, camera-bone binding, startup policy, and camera-specific 3D projection remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
 
 The CGSS skeleton parser supports the custom binary header used by the tested cards. Other skeleton formats and exhaustive malformed-input handling need separate parser work. The current tests do not prove support for every CGSS asset.
 
 The standalone folder contains committed copies so it can be hosted on its own. Run `npm run sync:standalone` after changing shared code, then run `npm run check:standalone`. The script defines the synchronized page modules. Standalone HTML, CSS, `player.js`, and `standalone.js` are maintained directly.
 
 ## Validation
-
-The verification suite covers parser failures, cancellation during viewer construction, error recovery, representative cards and their RGBA hashes, the separated runtime update/draw boundary, and both browser distributions. Browser checks cover card swapping, pause, the static emitter reference frame, visible diagnostic fields, and the bare player entry. See [Validation](docs/validation.md) for the recorded scope and the distinction between historical results and future runs.
 
 We cover parser failures, particle simulation, render-plan order, playback lifecycle, and WebGL submission state with focused checks. We also maintain browser smoke checks for both distributions. [Validation](docs/validation.md) records the public test commands and scope.
 

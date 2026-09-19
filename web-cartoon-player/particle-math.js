@@ -43,6 +43,25 @@ export function particleScale(transforms, mode) {
   return (mode === 1 ? transforms.slice(0,1) : transforms).reduce((s,t)=>({x:s.x*Math.abs(t.data.m_LocalScale.x),y:s.y*Math.abs(t.data.m_LocalScale.y)}),{x:1,y:1});
 }
 
+// Unity render mode 1 is Stretch Billboard. Its long axis follows motion while
+// the authored rotation rolls the quad around that axis.
+export function stretchedBillboard(renderer, size, velocity, rotation = 0, sizeY = size) {
+  if (renderer?.m_RenderMode !== 1) {
+    const pivot = renderer?.m_Pivot || {}, x=(pivot.x || 0)*size, y=(pivot.y || 0)*sizeY;
+    const c=Math.cos(rotation), s=Math.sin(rotation);
+    return {width:size, height:sizeY, angle:rotation, offset:{x:c*x-s*y,y:s*x+c*y}};
+  }
+  const vx = velocity?.x || 0, vy = velocity?.y || 0, speed = Math.hypot(vx, vy);
+  const length = Math.max(0, sizeY * (renderer.m_LengthScale ?? 1) + speed * (renderer.m_VelocityScale ?? 0));
+  if (!(speed > 1e-8)) return {width:size, height:length, angle:rotation, offset:{x:0,y:0}};
+  const pivot = renderer.m_Pivot || {}, forward = {x:vx / speed, y:vy / speed};
+  // m_Pivot is expressed in particle-size units. Its Y component moves the
+  // stretched quad along its direction of motion.
+  return {width:size, height:length, angle:Math.atan2(vy, vx) + Math.PI / 2 + rotation,
+    offset:{x:(pivot.x || 0) * size * forward.y + (pivot.y || 0) * size * forward.x,
+      y:-(pivot.x || 0) * size * forward.x + (pivot.y || 0) * size * forward.y}};
+}
+
 // SortingLayerID is an identifier, not a sortable layer index.
 export function compareEmitters(a, b) {
   return (a.renderer.m_SortingLayer ?? 0) - (b.renderer.m_SortingLayer ?? 0)

@@ -21,7 +21,7 @@ UnityFS bundle
 independently discovers every card `GameObject` hierarchy containing a
 `ParticleSystem`. We require at least one supported skeleton and do not require
 a fixed set. We give the current named slots explicit ordering
-offsets in `web/render-plan.js`: `bg` 0, `eff2` 10, `chara` 30, `fg` 40, and
+offsets in `web/render-plan.js`: `bg` 0, `eff2` 10, `eff3` 20, `chara` 30, `fg` 40, and
 `eff1` 50. Particle renderer order is `60 + m_SortingOrder`. The first number
 is a cross-object base, not a substitute for local particle sorting.
 
@@ -72,21 +72,29 @@ evaluates the current population without advancing it, then submits each sprite
 to the shared renderer. Rendering a paused frame therefore does not change the
 simulation state.
 
-Supported material equations are:
+We support these particle material families:
 
-- `CommonParticle/Standard/Blend`: clamp `2 × textureRGBA × particleRGBA × materialRGBA` to `[0, 1]`.
-- `CommonParticle/TexAlpha/Simple/Blend`: texture color and resolved alpha mask, multiplied by particle and material RGBA.
+- `CommonParticle/Standard/Blend` and `CommonParticle/TexAlpha/Standard/Blend` double the texture, particle, and material color before clamping it.
+- `CommonParticle/Simple/Blend` and `CommonParticle/TexAlpha/Simple/Blend` use the same inputs without doubling them.
+- `CommonParticle/Standard/Multiply` doubles and clamps the inputs, then turns the result into a multiplier before applying the material's `ZERO` / `SRC_COLOR` blend state.
+- `CommonParticle/Standard/AddtiveMultiply` uses doubled RGB and derives alpha from its RGB luminance and `_MultiplyTex` red channel. We use the shader's white default when that texture is not assigned.
 
-We use alpha from Alpha8 masks and the red channel from color masks. We support
-source alpha with either one or one-minus-source-alpha destination behavior.
-We report an error for other particle shaders or blend states instead of using a
-generic effect texture.
+We take transparency from the texture when it is present. For `TexAlpha` materials,
+we use the separate Alpha8 mask or the red channel of a color mask. We read each
+material's source and destination blend factors and submit them to WebGL. We
+report an error when a shader or render state has not been covered.
+
+We keep separate X and Y start sizes when a particle system enables 3D size,
+and we apply the renderer's Billboard pivot. We project X, Y, and Z particle
+rotation for tilted Billboard effects. This restores the authored tilt in effects
+such as floor light patterns while retaining the preview's orthographic camera.
 
 ## Known limits
 
 The following are outside the current browser model:
 
-- Exact random/noise kernels, noise-driven size and rotation, and full 3D billboards.
+- Exact random/noise kernels, noise-driven size and rotation, and camera-specific 3D Billboard perspective.
+- Mesh particle layouts other than the embedded Float32 geometry and the observed Unity default Quad. We rotate these in 3D and project them into the 2D preview. We leave other layouts out instead of presenting their texture as a billboard.
 - Burst emission, rate over distance, trails, collision, sub-emitters, and external force fields.
 - Camera-bone binding, startup simulation policy, runtime scale compensation, clipping timing, soft particles, and post-processing.
 - Distance sorting within an emitter and exact resolution of render-queue, depth, or equal-order ties.
@@ -114,6 +122,7 @@ the inspector resolves every final scene-order case.
 | Change cross-object submission order | `web/render-plan.js` |
 | Change timing, state ownership, or presentation | `web/scene-runtime.js` |
 | Change particle simulation or sprite evaluation | `web/particle-simulation.js`, `web/particle-overlay.js` |
+| Change particle shader and blend support | `web/particle-material.js`, `runtime/spine-webgl.js` |
 | Change atlas composition or preview fit | `web/viewer.js` |
 | Change Spine/particle WebGL output | `runtime/spine-webgl.js` |
 | Change loading cancellation | `web/load-session.js` |

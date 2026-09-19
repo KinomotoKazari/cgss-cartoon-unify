@@ -10,7 +10,7 @@ We run focused Node checks for parser bounds, particle scheduling, render-plan
 order, playback lifecycle, and WebGL submissions:
 
 ```sh
-node --test tests/scene-runtime.test.mjs tests/render-plan.test.mjs tests/webgl-submission.test.mjs tests/particle-simulation.test.mjs
+node --test tests/scene-runtime.test.mjs tests/render-plan.test.mjs tests/webgl-submission.test.mjs tests/particle-material.test.mjs tests/particle-simulation.test.mjs
 ```
 
 The rendering checks cover initial pose application, skeleton and emitter group

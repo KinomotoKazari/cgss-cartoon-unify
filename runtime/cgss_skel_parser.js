@@ -11,6 +11,7 @@
   var POSITION_MODES = ["fixed", "percent"];
   var SPACING_MODES = ["length", "fixed", "percent"];
   var ROTATE_MODES = ["tangent", "chain", "chainScale"];
+  var utf8 = new TextDecoder('utf-8');
 
   function Reader(b) {
     this.b = new Uint8Array(b);
@@ -66,8 +67,7 @@
     if (n === 1) return '';
     n -= 1;
     if (this.pos + n > this.b.length) throw new Error('EOF in string');
-    var s = '';
-    for (var i = 0; i < n; i++) s += String.fromCharCode(this.b[this.pos + i]);
+    var s = utf8.decode(this.b.subarray(this.pos, this.pos + n));
     this.pos += n;
     return s;
   };

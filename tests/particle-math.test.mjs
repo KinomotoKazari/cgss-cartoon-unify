@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {sample, integral, particleScale, rotateShape, compareEmitters} from '../web/particle-math.js';
+import {sample, integral, particleScale, rotateShape, compareEmitters, stretchedBillboard} from '../web/particle-math.js';
 
 const linear = (a,b) => ({m_Curve:[{time:0,value:a,inSlope:b-a,outSlope:b-a},{time:1,value:b,inSlope:b-a,outSlope:b-a}]});
 test('emitter ordering uses layer then signed order with stable ties',()=>{
@@ -25,4 +25,17 @@ test('size scaling follows hierarchy, local and shape-only modes',()=>{
   assert.deepEqual(particleScale(transforms,2),{x:1,y:1});
   const p=rotateShape({x:0,y:0,z:1},{y:90});
   assert.ok(Math.abs(p.x-1)<1e-9 && Math.abs(p.z)<1e-9);
+});
+test('stretch billboards use authored length, motion direction and pivot',()=>{
+  const quad=stretchedBillboard({m_RenderMode:1,m_LengthScale:10,m_VelocityScale:2,m_Pivot:{x:0,y:5}},4,{x:3,y:4});
+  assert.equal(quad.width,4); assert.equal(quad.height,50);
+  assert.ok(Math.abs(quad.angle-(Math.atan2(4,3)+Math.PI/2))<1e-12);
+  assert.deepEqual(quad.offset,{x:12,y:16});
+  assert.deepEqual(stretchedBillboard({m_RenderMode:0},4,{x:3,y:4},.5),{width:4,height:4,angle:.5,offset:{x:0,y:0}});
+});
+test('billboard 3D size and pivot keep distinct width and height',()=>{
+  const quad=stretchedBillboard({m_RenderMode:0,m_Pivot:{x:.1,y:.4}},60,{x:0,y:0},0,160);
+  assert.deepEqual(quad,{width:60,height:160,angle:0,offset:{x:6,y:64}});
+  const stretch=stretchedBillboard({m_RenderMode:1,m_LengthScale:.5,m_VelocityScale:0},60,{x:0,y:0},0,160);
+  assert.equal(stretch.height,80);
 });

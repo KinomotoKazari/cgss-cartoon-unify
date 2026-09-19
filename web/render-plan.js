@@ -1,10 +1,11 @@
 // Cross-object offsets from the reference game's native playback pipeline.
-export const SPINE_ORDERS = Object.freeze({bg:0, eff2:10, chara:30, fg:40, eff1:50});
+export const SPINE_ORDERS = Object.freeze({bg:0, eff2:10, eff3:20, chara:30, fg:40, eff1:50});
 
 export function createRenderPlan(skeletons, emitters = []) {
   const groups = skeletons.map(item => {
-    if (!Object.hasOwn(SPINE_ORDERS, item.layer)) throw new Error(`Unknown Spine slot: ${item.layer}`);
-    return {kind:'spine', id:item.layer, layer:0, order:SPINE_ORDERS[item.layer], item};
+    const slot = item.slot || (Object.hasOwn(SPINE_ORDERS, item.layer) ? item.layer : item.layer.replace(/\d+$/, ''));
+    if (!Object.hasOwn(SPINE_ORDERS, slot)) throw new Error(`Unknown Spine slot: ${item.layer}`);
+    return {kind:'spine', id:item.layer, layer:0, order:SPINE_ORDERS[slot], item};
   });
   for (const emitter of emitters) groups.push({kind:'particle', id:emitter.id,
     layer:emitter.renderer.m_SortingLayer ?? 0,

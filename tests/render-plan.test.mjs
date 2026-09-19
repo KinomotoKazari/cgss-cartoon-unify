@@ -23,3 +23,22 @@ test('equal-order fallback is stable and sorting-layer IDs are not priorities', 
   assert.deepEqual(plan.groups.map(g => g.id), ['chara','first','second','second-layer']);
   assert.deepEqual(plan.diagnostics.ties, [{layer:0,order:30,ids:['chara','first','second'],policy:'stable-preview-order'}]);
 });
+
+test('numbered skeleton variants retain their base-slot render order', () => {
+  const plan = createRenderPlan([
+    {layer:'chara2', slot:'chara'},
+    {layer:'fg2', slot:'fg'},
+    {layer:'chara', slot:'chara'},
+    {layer:'fg', slot:'fg'}
+  ]);
+  assert.deepEqual(plan.groups.map(group => [group.id, group.order]), [
+    ['chara2',30], ['chara',30], ['fg2',40], ['fg',40]
+  ]);
+});
+
+test('the optional eff3 skeleton layer sorts between eff2 and chara', () => {
+  const plan = createRenderPlan([{layer:'chara'}, {layer:'eff3'}, {layer:'eff2'}, {layer:'bg'}]);
+  assert.deepEqual(plan.groups.map(group => [group.id, group.order]), [
+    ['bg',0], ['eff2',10], ['eff3',20], ['chara',30]
+  ]);
+});

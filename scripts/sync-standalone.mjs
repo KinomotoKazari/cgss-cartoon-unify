@@ -6,8 +6,8 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const check = process.argv.includes('--check');
 // Canonical shared modules live outside the standalone folder.
 const shared = [
-  'viewer.js', 'particle-overlay.js', 'particle-inspector.js', 'particle-math.js', 'particle-simulation.js', 'particle-motion.js', 'particle-color.js',
-  'load-session.js', 'preview-page.js', 'embed-player.js', 'emitter-debug.js', 'scene-runtime.js', 'render-plan.js'
+  'viewer.js', 'particle-overlay.js', 'particle-material.js', 'particle-inspector.js', 'particle-math.js', 'particle-simulation.js', 'particle-motion.js', 'particle-color.js',
+  'load-session.js', 'preview-page.js', 'embed-player.js', 'emitter-debug.js', 'scene-runtime.js', 'render-plan.js', 'deferred-state.js'
 ];
 const files = shared.map(name => ['web/' + name, name]);
 for (const directory of ['src', 'runtime']) {

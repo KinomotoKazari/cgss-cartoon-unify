@@ -17,13 +17,19 @@
     'uniform sampler2D uTex;' +
     'uniform float uParticle;' +
     'uniform float uParticleMask;' +
+    'uniform float uParticleMultiply;' +
+    'uniform float uParticleLuma;' +
     'uniform float uGain;' +
     // Match the canvas compositor's premultiplied alpha.
     'void main(){ vec4 t = texture2D(uTex, vUV);' +
+    'if(uParticle > 0.5 && uParticleMultiply > 0.5){ vec4 c = clamp(t * vColor * uGain, 0.0, 1.0);' +
+    'gl_FragColor = vec4(1.0) + c.a * (c - vec4(1.0)); return; }' +
+    'if(uParticle > 0.5 && uParticleLuma > 0.5){ vec3 c = clamp(t.rgb * vColor.rgb * uGain, 0.0, 1.0);' +
+    'float a = dot(c, vec3(0.3, 0.59, 0.11)) * t.a; gl_FragColor = vec4(c, a); return; }' +
     'if(uParticle > 0.5 && uParticleMask > 0.5){ float a = max(t.r, max(t.g, t.b)) * vColor.a;' +
     'vec3 c = clamp(t.rgb * vColor.rgb * uGain, 0.0, 1.0); gl_FragColor = vec4(c, a); return; }' +
     'if(uParticle > 0.5){ vec4 c = clamp(t * vColor * uGain, 0.0, 1.0);' +
-    'gl_FragColor = vec4(c.rgb * c.a, c.a); return; }' +
+    'gl_FragColor = c; return; }' +
     'float a = t.a * vColor.a;' +
     'gl_FragColor = vec4(t.rgb * vColor.rgb * a, a); }';
 
@@ -80,6 +86,8 @@
     this.uTex = gl.getUniformLocation(this.program, 'uTex');
     this.uParticle = gl.getUniformLocation(this.program, 'uParticle');
     this.uParticleMask = gl.getUniformLocation(this.program, 'uParticleMask');
+    this.uParticleMultiply = gl.getUniformLocation(this.program, 'uParticleMultiply');
+    this.uParticleLuma = gl.getUniformLocation(this.program, 'uParticleLuma');
     this.uGain = gl.getUniformLocation(this.program, 'uGain');
 
     this.vbo = gl.createBuffer();
@@ -175,6 +183,15 @@
     }
   };
 
+  CGSSWebGLRenderer.prototype._setParticleBlend = function (sprite) {
+    var gl = this.gl;
+    var factors = {0:gl.ZERO, 1:gl.ONE, 3:gl.SRC_COLOR, 5:gl.SRC_ALPHA,
+      6:gl.ONE_MINUS_SRC_COLOR, 7:gl.DST_ALPHA, 10:gl.ONE_MINUS_SRC_ALPHA};
+    var src = sprite.blendSrc ?? 5, dst = sprite.blendDst ?? (sprite.additive ? 1 : 10);
+    if (factors[src] === undefined || factors[dst] === undefined) throw new Error('Unsupported particle blend factor');
+    gl.blendFunc(factors[src], factors[dst]);
+  };
+
   CGSSWebGLRenderer.prototype.draw = function (skeleton) {
     var gl = this.gl;
     gl.enable(gl.BLEND);
@@ -185,6 +202,8 @@
     gl.colorMask(true, true, true, true);
     gl.uniform1f(this.uParticle, 0);
     gl.uniform1f(this.uParticleMask, 0);
+    gl.uniform1f(this.uParticleMultiply, 0);
+    gl.uniform1f(this.uParticleLuma, 0);
     gl.uniform1f(this.uGain, 1);
 
     var skeletonColor = skeleton.color;
@@ -260,11 +279,13 @@
     gl.enable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
     gl.blendEquation(gl.FUNC_ADD);
-    // Particle shader output is premultiplied; preserve destination alpha.
-    gl.blendFunc(gl.ONE, sprite.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
-    gl.colorMask(true, true, true, false);
+    this._setParticleBlend(sprite);
+    var mask = sprite.colorMask ?? 14;
+    gl.colorMask(!!(mask & 8), !!(mask & 4), !!(mask & 2), !!(mask & 1));
     gl.uniform1f(this.uParticle, 1);
     gl.uniform1f(this.uParticleMask, sprite.maskAlpha ? 1 : 0);
+    gl.uniform1f(this.uParticleMultiply, sprite.multiply ? 1 : 0);
+    gl.uniform1f(this.uParticleLuma, sprite.lumaAlpha ? 1 : 0);
     gl.uniform1f(this.uGain, sprite.gain);
     var c = Math.cos(sprite.angle), s = Math.sin(sprite.angle);
     var corners = [[-.5,-.5,0,0],[.5,-.5,1,0],[.5,.5,1,1],[-.5,.5,0,1]];
@@ -273,6 +294,42 @@
       var p = corners[indices[i]], x = p[0]*sprite.width, y = p[1]*sprite.height;
       this._push(null, sprite.x+x*c-y*s, sprite.y+x*s+y*c,
         uv.u+p[2]*uv.width, uv.v+p[3]*uv.height, color.r, color.g, color.b, color.a);
+    }
+    this._flush();
+    gl.colorMask(true, true, true, true);
+  };
+
+  CGSSWebGLRenderer.prototype.drawParticleMesh = function (image, sprite) {
+    var gl = this.gl;
+    this._flush();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this._texture(image));
+    gl.useProgram(this.program);
+    gl.enable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.blendEquation(gl.FUNC_ADD);
+    this._setParticleBlend(sprite);
+    var mask = sprite.colorMask ?? 14;
+    gl.colorMask(!!(mask & 8), !!(mask & 4), !!(mask & 2), !!(mask & 1));
+    gl.uniform1f(this.uParticle, 1);
+    gl.uniform1f(this.uParticleMask, sprite.maskAlpha ? 1 : 0);
+    gl.uniform1f(this.uParticleMultiply, sprite.multiply ? 1 : 0);
+    gl.uniform1f(this.uParticleLuma, sprite.lumaAlpha ? 1 : 0);
+    gl.uniform1f(this.uGain, sprite.gain);
+    var rotation = sprite.rotation || {x:0, y:0, z:-sprite.angle};
+    var cz = Math.cos(rotation.z), sz = Math.sin(rotation.z);
+    var cx = Math.cos(rotation.x), sx = Math.sin(rotation.x);
+    var cy = Math.cos(rotation.y), sy = Math.sin(rotation.y);
+    var color = sprite.color, uv = sprite.region;
+    for (var i = 0; i < sprite.mesh.indices.length; i++) {
+      var p = sprite.mesh.vertices[sprite.mesh.indices[i]];
+      // Unity's Euler order is Z, X, Y. Project the rotated mesh after the
+      // particle's local rotation so X/Y motion changes its visible silhouette.
+      var x1 = p.x*cz - p.y*sz, y1 = p.x*sz + p.y*cz;
+      var y2 = y1*cx - p.z*sx, z2 = y1*sx + p.z*cx;
+      var x3 = x1*cy + z2*sy, y3 = y2;
+      this._push(null, sprite.x + x3*sprite.width, sprite.y - y3*sprite.height,
+        uv.u + p.u*uv.width, uv.v + p.v*uv.height, color.r, color.g, color.b, color.a);
     }
     this._flush();
     gl.colorMask(true, true, true, true);

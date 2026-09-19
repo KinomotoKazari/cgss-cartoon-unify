@@ -12,10 +12,11 @@ export function* references(value) {
 }
 
 function* objectReferences(object, data) {
-  // Billboard, stretched, horizontal, and vertical particle renderers do not use
-  // m_Mesh. Unity commonly points that dormant field at its built-in mesh.
   for (const [key, value] of Object.entries(data)) {
-    if (object.type === 'ParticleSystemRenderer' && key === 'm_Mesh' && data.m_RenderMode !== 4) continue;
+    // Billboard modes do not consume m_Mesh. External Mesh-mode geometry is
+    // handled explicitly when the transferable render plan is built.
+    if (object.type === 'ParticleSystemRenderer' && key === 'm_Mesh' &&
+        (data.m_RenderMode !== 4 || value?.m_FileID)) continue;
     yield* references(value);
   }
 }
@@ -60,7 +61,14 @@ export class ObjectResolver {
       seen.set(object.key, object);
       // Shader bytecode isn't needed by the browser renderer.
       if (object.type === 'Shader') continue;
-      for (const pointer of objectReferences(object, this.data(object))) pending.push(this.resolve(object, pointer));
+      const data = this.data(object), ownerFile = this.files.get(object.file);
+      for (const pointer of objectReferences(object, data)) {
+        const target = pointer.m_FileID ? ownerFile.externals[pointer.m_FileID - 1]?.toLowerCase() : '';
+        // Built-in shaders are not present in card bundles and are not consumed by
+        // the browser renderer. Keep embedded shaders available for render-state data.
+        if (object.type === 'Material' && pointer === data.m_Shader && ['library/unity default resources', 'resources/unity_builtin_extra'].includes(target)) continue;
+        pending.push(this.resolve(object, pointer));
+      }
     }
     return seen;
   }

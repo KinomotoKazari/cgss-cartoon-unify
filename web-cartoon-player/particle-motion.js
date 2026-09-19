@@ -3,6 +3,22 @@ import {randomSequence} from './particle-simulation.js';
 
 const axes = ['x','y','z'];
 
+const scalar = (curve, fallback = 1) => curve?.value ?? fallback;
+const diskRadius = (shape, random) => {
+  const inner = 1-(shape.radiusThickness ?? 1), outer = scalar(shape.radius);
+  return outer*Math.sqrt(inner*inner+(1-inner*inner)*random());
+};
+const angle = (shape, random) => random()*(shape.arc?.value ?? 360)*Math.PI/180;
+const boxShell = random => {
+  const face = Math.min(5,Math.floor(random()*6)), a=random()-.5, b=random()-.5;
+  if (face===0) return {x:-.5,y:a,z:b};
+  if (face===1) return {x:.5,y:a,z:b};
+  if (face===2) return {x:a,y:-.5,z:b};
+  if (face===3) return {x:a,y:.5,z:b};
+  if (face===4) return {x:a,y:b,z:-.5};
+  return {x:a,y:b,z:.5};
+};
+
 // Retain depth while composing prefab transforms, even for the orthographic preview.
 export function transformPoint(point, transform) {
   const d = transform.data, q = d.m_LocalRotation;
@@ -17,19 +33,38 @@ export function transformPoint(point, transform) {
 export function sampleShape(shape, random) {
   let position = {x:0,y:0,z:0}, direction = {x:0,y:0,z:1};
   if (!shape?.enabled) return {position,direction};
-  if (shape.type === 4) {
-    const inner = 1-(shape.radiusThickness ?? 1);
-    const radius = Math.sqrt(inner*inner+(1-inner*inner)*random());
-    const angle = random()*(shape.arc?.value ?? 360)*Math.PI/180;
+  if (shape.type === 0 || shape.type === 2) {
+    const z = shape.type===2 ? random() : random()*2-1, phi=random()*Math.PI*2;
+    const radial=Math.sqrt(1-z*z), inner=1-(shape.radiusThickness ?? 1);
+    const radius=scalar(shape.radius)*Math.cbrt(inner**3+(1-inner**3)*random());
+    position={x:Math.cos(phi)*radial*radius,y:Math.sin(phi)*radial*radius,z:z*radius};
+    direction={x:Math.cos(phi)*radial,y:Math.sin(phi)*radial,z};
+  } else if (shape.type === 4) {
+    const radius = diskRadius(shape,random);
+    const theta = angle(shape,random);
     const spread = Math.tan(shape.angle*Math.PI/180)*radius;
-    position = {x:Math.cos(angle)*radius*(shape.radius?.value ?? 1),y:Math.sin(angle)*radius*(shape.radius?.value ?? 1),z:0};
+    position = {x:Math.cos(theta)*radius,y:Math.sin(theta)*radius,z:0};
     const length = Math.hypot(spread,1);
-    direction = {x:Math.cos(angle)*spread/length,y:Math.sin(angle)*spread/length,z:1/length};
+    direction = {x:Math.cos(theta)*spread/length,y:Math.sin(theta)*spread/length,z:1/length};
   } else if (shape.type === 5) {
     position = {x:random()-.5,y:random()-.5,z:random()-.5};
   } else if (shape.type === 10) {
-    // SingleSidedEdge emits along its local X edge before shape transforms.
-    position = {x:(random()*2-1)*(shape.radius?.value ?? 1),y:0,z:0};
+    position = boxShell(random);
+  } else if (shape.type === 12) {
+    const theta=angle(shape,random), radius=diskRadius(shape,random);
+    position={x:Math.cos(theta)*radius,y:Math.sin(theta)*radius,z:0};
+  } else if (shape.type === 15) {
+    const theta=random()*Math.PI*2, phi=random()*Math.PI*2;
+    const major=scalar(shape.radius), minor=major*(shape.donutRadius ?? .2)*Math.sqrt(random());
+    position={x:(major+minor*Math.cos(phi))*Math.cos(theta),y:(major+minor*Math.cos(phi))*Math.sin(theta),z:minor*Math.sin(phi)};
+  } else if (shape.type === 16 || shape.type === 17 || shape.type === 18) {
+    // The sampled bundles provide no Sprite or SpriteRenderer reference. Their
+    // authored scale therefore defines the available rectangular emission area.
+    position={x:random()-.5,y:random()-.5,z:0};
+  } else if (shape.type === 8 && ['0',0,undefined,null].includes(shape.m_MeshRenderer?.m_PathID)) {
+    // Unity falls back to the emitter origin when a MeshRenderer shape has no
+    // source renderer. Every observed type-8 system uses this serialized form.
+    position={x:0,y:0,z:0};
   } else {
     throw new Error(`Unsupported particle shape ${shape.type}`);
   }
