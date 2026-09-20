@@ -154,13 +154,13 @@ step schedule is stable across browser frame rates, while the exact Unity
 random sequence remains unverified.
 
 We apply the bundle's Noise settings to particle position, size, and rotation.
-We evaluate size against the same deterministic noise sample used for position,
-but do not apply the position field's frequency-dependent displacement gain to
-particle size. This keeps low-frequency Noise from collapsing or excessively
-enlarging otherwise visible sprites. We
-integrate rotation during fixed simulation ticks, so browser frame partitioning
-does not change its accumulated angle. The field and its channel mapping are
-approximations, not a claim of exact Unity output. We still need a visual check
+We use a deterministic curl-like derivative field for position. This prevents
+low-frequency damped Noise from multiplying raw position samples into very fast
+motion, as seen with white particles on cards 301202 and 100468. We keep size
+on its separate scalar field so position damping does not enlarge or collapse
+sprites. We also keep the existing rotation path and integrate it during fixed
+simulation ticks. The field and its channel mapping remain approximations, not
+a claim of exact Unity output. We still need a visual check of these cards and
 of the size distribution on cards that use `NoiseModule.sizeAmount`.
 We retain `NoiseModule.quality` in the parsed scene data, but the substitute
 field does not yet reproduce its sampling behavior. We list it separately in

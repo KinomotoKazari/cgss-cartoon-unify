@@ -108,3 +108,17 @@ test('noise size is not amplified by displacement damping at low frequency',()=>
   assert.notDeepEqual(damped.offset,plain.offset);
   assert.ok(Number.isFinite(damped.sizeScale));
 });
+test('low-frequency damped position Noise does not amplify raw field values',()=>{
+  const module={enabled:true,strength:constant(6.3),frequency:.009,damping:true,octaves:1,
+    octaveMultiplier:.5,octaveScale:2,scrollSpeed:constant(.78),
+    positionAmount:constant(1),sizeAmount:constant(0),rotationAmount:constant(0)};
+  const point={x:140,y:-70,z:0};
+  for(let seed=1;seed<=20;seed++) {
+    const before=noiseEffects(module,point,5,10,seed).offset;
+    const after=noiseEffects(module,point,5+1/60,10,seed).offset;
+    for(const axis of ['x','y','z']) {
+      assert.ok(Math.abs(before[axis])<40,`${axis} displacement too large for seed ${seed}`);
+      assert.ok(Math.abs(after[axis]-before[axis])<5,`${axis} tick motion too large for seed ${seed}`);
+    }
+  }
+});

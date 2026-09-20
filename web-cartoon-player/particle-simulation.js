@@ -103,20 +103,28 @@ export class ParticleSimulation {
   }
 }
 
-// Smooth deterministic value noise. This is not Unity's native noise kernel.
-function noise(x, y, z, seed) {
+// Smooth deterministic potential and gradient for a curl-like position field.
+// This is not Unity's native Perlin noise kernel.
+function noiseSample(x, y, z, seed) {
   const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
   const smooth = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const slope = t => 30 * t * t * (t - 1) * (t - 1);
   const u = smooth(x - ix), v = smooth(y - iy), w = smooth(z - iz);
-  let value = 0;
+  const du = slope(x - ix), dv = slope(y - iy), dw = slope(z - iz);
+  let value = 0, dx = 0, dy = 0, dz = 0;
   for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) for (let c = 0; c < 2; c++) {
     let hash = Math.imul(ix + a, 374761393) ^ Math.imul(iy + b, 668265263)
       ^ Math.imul(iz + c, 1274126177) ^ seed;
     hash = Math.imul(hash ^ (hash >>> 13), 1274126177);
     hash ^= hash >>> 16;
-    value += ((hash >>> 0) / 4294967296 * 2 - 1) * (a ? u : 1 - u) * (b ? v : 1 - v) * (c ? w : 1 - w);
+    const corner = (hash >>> 0) / 4294967296 * 2 - 1;
+    const wx = a ? u : 1 - u, wy = b ? v : 1 - v, wz = c ? w : 1 - w;
+    value += corner * wx * wy * wz;
+    dx += corner * (a ? du : -du) * wy * wz;
+    dy += corner * wx * (b ? dv : -dv) * wz;
+    dz += corner * wx * wy * (c ? dw : -dw);
   }
-  return value;
+  return {value, dx, dy, dz};
 }
 
 export function noiseEffects(module, position, age, lifetime, seed) {
@@ -127,22 +135,33 @@ export function noiseEffects(module, position, age, lifetime, seed) {
   const scroll = sample(module.scrollSpeed, random(), t) * age;
   const baseFrequency = Math.max(0.0001, module.frequency || 0.0001);
   const field = {x:0, y:0, z:0};
+  const curl = {x:0, y:0, z:0};
   let sizeField = 0;
-  for (const [index, axis] of ['x', 'y', 'z'].entries()) {
-    let amplitude = 1, frequency = baseFrequency, value = 0;
-    for (let octave = 0; octave < Math.max(1, module.octaves); octave++) {
-      value += noise(position.x * frequency + scroll, position.y * frequency, position.z * frequency,
-        seed + index * 1013 + octave * 7919) * amplitude;
-      amplitude *= module.octaveMultiplier;
-      frequency *= module.octaveScale;
-    }
+  const values = {x:0, y:0, z:0};
+  let amplitude = 1, frequency = baseFrequency;
+  for (let octave = 0; octave < Math.max(1, module.octaves); octave++) {
+    const potentials = [0, 1, 2].map(index => noiseSample(
+      position.x * frequency + scroll, position.y * frequency, position.z * frequency,
+      seed + index * 1013 + octave * 7919));
+    for (const [index, axis] of ['x', 'y', 'z'].entries()) values[axis] += potentials[index].value * amplitude;
+    // Curl is the spatial derivative of three scalar potentials. Damping
+    // removes its frequency factor, rather than dividing raw noise by frequency.
+    const gain = amplitude * (module.damping ? 1 : frequency);
+    curl.x += (potentials[2].dy - potentials[1].dz) * gain;
+    curl.y += (potentials[0].dz - potentials[2].dx) * gain;
+    curl.z += (potentials[1].dx - potentials[0].dy) * gain;
+    amplitude *= module.octaveMultiplier;
+    frequency *= module.octaveScale;
+  }
+  for (const axis of ['x', 'y', 'z']) {
+    let value = values[axis];
     if (module.remapEnabled) value = sample(module[axis === 'x' ? 'remap' : `remap${axis.toUpperCase()}`], random(), (value + 1) / 2) * 2 - 1;
     const strength = sample(module.separateAxes && axis !== 'x' ? module[`strength${axis.toUpperCase()}`] : module.strength, random(), t);
     const weighted = value * strength;
     field[axis] = weighted / (module.damping ? baseFrequency : 1);
     if (axis === 'x') sizeField = weighted;
     const positionAmount = sample(module.positionAmount, random(), t);
-    offset[axis] = positionAmount === 0 ? 0 : field[axis] * positionAmount;
+    offset[axis] = positionAmount === 0 ? 0 : curl[axis] * strength * positionAmount;
   }
   // Keep size modulation separate from the frequency-dependent displacement gain.
   // The field and channel mapping are still an approximation of Unity's native noise.
