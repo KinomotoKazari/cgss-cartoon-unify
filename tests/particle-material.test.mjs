@@ -40,6 +40,22 @@ test('less common Simple blend factors remain distinct', () => {
   }
 });
 
+test('authored destination-color source factors remain distinct from alpha blending', () => {
+  for (const [name,src,alphaSource] of [
+    ['CommonParticle/Standard/Blend',3,'main-texture'],
+    ['CommonParticle/Standard/Blend',4,'main-texture'],
+    ['CommonParticle/TexAlpha/Simple/Blend',4,'alpha-texture-red']
+  ]) {
+    const {shader,material} = fixture(name,src,1);
+    const state = resolveParticleMaterial(shader,material,{mainFormat:34,
+      alphaFormat:34,alphaAssigned:true,hasAlphaTexture:true});
+    assert.equal(state.src,src);
+    assert.equal(state.dst,1);
+    assert.equal(state.alphaSource,alphaSource);
+    assert.equal(state.confidence,'shader-and-material');
+  }
+});
+
 test('shader, blend, and texture format select one explicit alpha path', () => {
   const {shader,material} = fixture('CommonParticle/Standard/Blend',5,1);
   assert.equal(resolveParticleMaterial(shader,material,{mainFormat:34}).alphaSource,'main-texture');
@@ -77,7 +93,12 @@ test('representative bundles select their material paths without card-specific r
       ['100108','leaf_front1','alpha-texture-red'],
       ['201389','eff_circle_03','main-texture'],
       ['100281','water_splash03_1','main-texture'],
-      ['100398','flowerL1','alpha-texture-red']
+      ['100398','flowerL1','alpha-texture-red'],
+      ['101138','eff_circle_01','main-texture'],
+      ['101287','smoke_01','alpha-texture-red'],
+      ['300815','blur','main-texture'],
+      ['300895','blur_1','main-texture'],
+      ['301056','ray_front_03','main-texture']
     ]) {
       if(!cards.has(id)) cards.set(id,loadCard(fs.readFileSync(path.join(process.env.CGSS_BUNDLE_DIR,`card_cartoon_${id}.unity3d`))));
       const card=cards.get(id);

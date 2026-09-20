@@ -38,6 +38,36 @@ export class ParticleSimulation {
     this.particles.push(particle);
   }
 
+  emitBursts(start, end, duration) {
+    const bursts = this.system.EmissionModule?.m_Bursts || [];
+    if (!bursts.length) return;
+    const relativeStart = start - this.delay, relativeEnd = end - this.delay;
+    if (relativeEnd <= 0) return;
+    const firstCycle = Math.max(0, Math.floor(Math.max(0, relativeStart) / duration));
+    const lastCycle = Math.floor((relativeEnd - EPSILON) / duration);
+    for (let cycle = firstCycle; cycle <= lastCycle; cycle++) {
+      if (!this.system.looping && cycle > 0) break;
+      for (const burst of bursts) {
+        const initialTime = burst.time ?? 0;
+        if (initialTime < 0 || initialTime >= duration) continue;
+        const interval = burst.repeatInterval || 0;
+        const available = interval > 0 ? Math.ceil((duration - initialTime) / interval) : 1;
+        const repeats = burst.cycleCount > 0 ? Math.min(available, burst.cycleCount) : available;
+        for (let repeat = 0; repeat < repeats; repeat++) {
+          const withinCycle = initialTime + repeat * interval;
+          const eventTime = cycle * duration + withinCycle;
+          if (eventTime < relativeStart - EPSILON || eventTime >= relativeEnd - EPSILON) continue;
+          const probability = burst.probability ?? 1;
+          if (probability <= 0 || (probability < 1 && this.random() >= probability)) continue;
+          const phase = withinCycle / duration;
+          const amount = Math.max(0, sample(burst.countCurve, this.random(), phase));
+          const count = Math.floor(amount) + (this.random() < amount % 1 ? 1 : 0);
+          for (let i = 0; i < count; i++) this.spawn(this.delay + eventTime, phase);
+        }
+      }
+    }
+  }
+
   advance(delta, prewarm = false) {
     this.pending += Math.max(0,delta) * (prewarm ? 1 : (this.system.simulationSpeed ?? 1));
     const step = 1 / 60;
@@ -46,7 +76,7 @@ export class ParticleSimulation {
       const start = this.time;
       const end = start + step;
       const activeTime = start - this.delay;
-      if (activeTime >= 0 && (this.system.looping || activeTime < duration)) {
+      if (this.system.EmissionModule?.enabled !== false && activeTime >= 0 && (this.system.looping || activeTime < duration)) {
         const cycle = Math.floor(activeTime / duration);
         const phase = (activeTime % duration) / duration;
         if (cycle !== this.cycle) {
@@ -60,6 +90,7 @@ export class ParticleSimulation {
         for (let i = 0; i < births; i++) this.spawn(start + (1 - previous + i) / rate, phase);
         this.credit = Math.max(0, this.credit - births);
       }
+      if (this.system.EmissionModule?.enabled !== false) this.emitBursts(start, end, duration);
       for (const particle of this.particles) {
         const until = Math.min(end,particle.birth+particle.lifetime);
         const delta = until-Math.max(start,particle.birth);
@@ -96,6 +127,7 @@ export function noiseEffects(module, position, age, lifetime, seed) {
   const scroll = sample(module.scrollSpeed, random(), t) * age;
   const baseFrequency = Math.max(0.0001, module.frequency || 0.0001);
   const field = {x:0, y:0, z:0};
+  let sizeField = 0;
   for (const [index, axis] of ['x', 'y', 'z'].entries()) {
     let amplitude = 1, frequency = baseFrequency, value = 0;
     for (let octave = 0; octave < Math.max(1, module.octaves); octave++) {
@@ -106,15 +138,17 @@ export function noiseEffects(module, position, age, lifetime, seed) {
     }
     if (module.remapEnabled) value = sample(module[axis === 'x' ? 'remap' : `remap${axis.toUpperCase()}`], random(), (value + 1) / 2) * 2 - 1;
     const strength = sample(module.separateAxes && axis !== 'x' ? module[`strength${axis.toUpperCase()}`] : module.strength, random(), t);
-    field[axis] = value * strength / (module.damping ? baseFrequency : 1);
+    const weighted = value * strength;
+    field[axis] = weighted / (module.damping ? baseFrequency : 1);
+    if (axis === 'x') sizeField = weighted;
     const positionAmount = sample(module.positionAmount, random(), t);
     offset[axis] = positionAmount === 0 ? 0 : field[axis] * positionAmount;
   }
-  // The same authored noise settings affect position, size, and rotation.
-  // The field is deterministic, but its kernel and channel mapping are an approximation.
+  // Keep size modulation separate from the frequency-dependent displacement gain.
+  // The field and channel mapping are still an approximation of Unity's native noise.
   const sizeRandom = randomSequence(seed ^ 0x537a1e)();
   const rotationRandom = randomSequence(seed ^ 0x726f7461)();
-  const sizeScale = Math.max(0, 1 + field.x * sample(module.sizeAmount, sizeRandom, t));
+  const sizeScale = Math.max(0, 1 + sizeField * sample(module.sizeAmount, sizeRandom, t));
   const angularVelocity = field.z * sample(module.rotationAmount, rotationRandom, t) * Math.PI / 180;
   return {offset, sizeScale, angularVelocity};
 }

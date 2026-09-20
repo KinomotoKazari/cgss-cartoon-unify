@@ -185,7 +185,7 @@
 
   CGSSWebGLRenderer.prototype._setParticleBlend = function (sprite) {
     var gl = this.gl;
-    var factors = {0:gl.ZERO, 1:gl.ONE, 3:gl.SRC_COLOR, 5:gl.SRC_ALPHA,
+    var factors = {0:gl.ZERO, 1:gl.ONE, 3:gl.SRC_COLOR, 4:gl.ONE_MINUS_DST_COLOR, 5:gl.SRC_ALPHA,
       6:gl.ONE_MINUS_SRC_COLOR, 7:gl.DST_ALPHA, 10:gl.ONE_MINUS_SRC_ALPHA};
     var src = sprite.blendSrc ?? 5, dst = sprite.blendDst ?? (sprite.additive ? 1 : 10);
     if (factors[src] === undefined || factors[dst] === undefined) throw new Error('Unsupported particle blend factor');

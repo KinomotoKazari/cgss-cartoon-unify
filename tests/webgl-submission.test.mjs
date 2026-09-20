@@ -31,7 +31,7 @@ function fixture() {
     'deleteProgram','deleteBuffer','pixelStorei','texParameteri','useProgram','bindBuffer',
     'enableVertexAttribArray','vertexAttribPointer','uniform1i','enable','disable','activeTexture',
     'blendEquation','viewport','clearColor','clear']) gl[name] = () => {};
-  for (const name of ['ZERO','ONE','SRC_COLOR','SRC_ALPHA','ONE_MINUS_SRC_ALPHA','DST_COLOR','DST_ALPHA','ONE_MINUS_SRC_COLOR','TEXTURE_2D',
+  for (const name of ['ZERO','ONE','SRC_COLOR','ONE_MINUS_DST_COLOR','SRC_ALPHA','ONE_MINUS_SRC_ALPHA','DST_COLOR','DST_ALPHA','ONE_MINUS_SRC_COLOR','TEXTURE_2D',
     'VERTEX_SHADER','FRAGMENT_SHADER','COMPILE_STATUS','LINK_STATUS','ARRAY_BUFFER','DYNAMIC_DRAW',
     'FLOAT','TRIANGLES','BLEND','DEPTH_TEST','TEXTURE0','FUNC_ADD','RGBA','UNSIGNED_BYTE','LINEAR',
     'CLAMP_TO_EDGE','TEXTURE_MIN_FILTER','TEXTURE_MAG_FILTER','TEXTURE_WRAP_S','TEXTURE_WRAP_T',
@@ -85,8 +85,11 @@ test('particle multiply and uncommon blend factors reach WebGL unchanged', t => 
     color:white,gain:2,colorMask:14};
   f.renderer.drawParticle({}, {...sprite,blendSrc:0,blendDst:3,multiply:true});
   f.renderer.drawParticle({}, {...sprite,blendSrc:5,blendDst:6,multiply:false});
+  f.renderer.drawParticle({}, {...sprite,blendSrc:3,blendDst:1,multiply:false});
+  f.renderer.drawParticle({}, {...sprite,blendSrc:4,blendDst:1,multiply:false});
   assert.deepEqual(f.draws.map(d => [d.blend,d.multiply]), [
-    [['ZERO','SRC_COLOR'],1], [['SRC_ALPHA','ONE_MINUS_SRC_COLOR'],0]
+    [['ZERO','SRC_COLOR'],1], [['SRC_ALPHA','ONE_MINUS_SRC_COLOR'],0],
+    [['SRC_COLOR','ONE'],0], [['ONE_MINUS_DST_COLOR','ONE'],0]
   ]);
 });
 

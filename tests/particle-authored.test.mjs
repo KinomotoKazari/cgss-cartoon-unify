@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {sampleShape,motionHooks,transformPoint} from '../web/particle-motion.js';
+import {sampleShape,motionHooks,orbitalVelocity,transformPoint} from '../web/particle-motion.js';
 import {ParticleSimulation,randomSequence} from '../web/particle-simulation.js';
 import {sampleColor,shadePixels} from '../web/particle-color.js';
 
@@ -24,6 +24,18 @@ test('cone births occupy the base disk, with outward unit directions',()=>{
     radiusSquared+=p.x*p.x+p.y*p.y;
   }
   assert.ok(Math.abs(radiusSquared/2000-2)<.1);
+});
+
+test('negative Shape Z scale reverses cone travel without moving its base',()=>{
+  const shape={enabled:true,type:4,angle:.2,radius:{value:2},arc:{value:360},
+    radiusThickness:1,m_Position:{x:0,y:0,z:0},m_Rotation:{x:-20,y:-120,z:120},
+    m_Scale:{x:35,y:35,z:1.5}};
+  const forward=sampleShape(shape,()=>.5);
+  const reversed=sampleShape({...shape,m_Scale:{...shape.m_Scale,z:-1.5}},()=>.5);
+  assert.deepEqual(reversed.position,forward.position);
+  assert.ok(reversed.direction.x>0 && reversed.direction.y<0);
+  assert.ok(forward.direction.x<0 && forward.direction.y>0);
+  assert.ok(Math.abs(Math.hypot(...Object.values(reversed.direction))-1)<1e-12);
 });
 
 test('box shell emits on a transformed box surface',()=>{
@@ -62,6 +74,33 @@ test('force integrates acceleration and speedModifier scales initial velocity to
   for(let i=0;i<60;i++) hooks.step(particle,1/60,(i+1)/60);
   assert.ok(Math.abs(particle.motion.position.x-3)<1e-10);
   assert.ok(Math.abs(particle.motion.position.z-6)<1e-10);
+});
+
+test('orbital axes use the offset center and radial speed points away from it',()=>{
+  assert.deepEqual(orbitalVelocity({x:2,y:0,z:0},{x:1,y:0,z:0},
+    {x:0,y:0,z:1},1),{x:1,y:1,z:0});
+  assert.deepEqual(orbitalVelocity({x:0,y:1,z:0},{x:0,y:0,z:0},
+    {x:1,y:0,z:0}),{x:0,y:0,z:1});
+});
+
+test('orbital motion keeps a stable radius and fixed-tick result',()=>{
+  const system={ShapeModule:{enabled:false},InitialModule:{startSpeed:constant(0)},
+    VelocityModule:{enabled:true,orbitalZ:constant(1),speedModifier:constant(1)}};
+  const particle={seed:4,phase:0,lifetime:10};
+  const hooks=motionHooks(system);
+  hooks.initialize(particle);
+  particle.motion.position={x:1,y:0,z:0};
+  for(let i=0;i<60;i++) hooks.step(particle,1/60,(i+1)/60);
+  assert.ok(Math.abs(particle.motion.position.x-Math.cos(1))<.001);
+  assert.ok(Math.abs(particle.motion.position.y-Math.sin(1))<.001);
+  assert.ok(Math.abs(Math.hypot(particle.motion.position.x,particle.motion.position.y)-1)<.001);
+  const inert={...system,VelocityModule:{enabled:true,orbitalZ:{minMaxState:0,scalar:0,minScalar:5}}};
+  const still={seed:4,phase:0,lifetime:10};
+  const inertHooks=motionHooks(inert);
+  inertHooks.initialize(still);
+  still.motion.position={x:1,y:0,z:0};
+  inertHooks.step(still,1/60,1/60);
+  assert.deepEqual(still.motion.position,{x:1,y:0,z:0});
 });
 
 test('per-tick random force and prewarm do not depend on display frame rate',()=>{

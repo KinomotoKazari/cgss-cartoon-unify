@@ -21,7 +21,8 @@ export function resolveParticleMaterial(shader, material, texture) {
   const src = binding(blend?.srcBlend), dst = binding(blend?.destBlend);
   const multiply = mode.input === 'multiply', lumaAlpha = mode.input === 'luminance-multiply';
   const supportedBlend = multiply ? src === 0 && dst === 3 :
-    (src === 5 && [1,5,6,7,10].includes(dst)) || (src === 1 && dst === 10);
+    (src === 5 && [1,5,6,7,10].includes(dst)) || (src === 1 && dst === 10) ||
+    ([3,4].includes(src) && dst === 1);
   if (!supportedBlend || binding(blend?.blendOp) !== 0)
     throw new Error(`Unsupported particle blend state for ${shader.name}: ${src}/${dst}`);
   const colorMask = binding(blend?.colMask);

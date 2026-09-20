@@ -151,7 +151,10 @@ window.CGSSParticleOverlay = (function () {
             const cell=((Math.floor(progress*total)%total)+total)%total;
             region = {u:(cell%columns)/columns, v:Math.floor(cell/columns)/rows, width:1/columns, height:1/rows};
           }
-          const quad=stretchedBillboard(emitter.renderer, width, {x:particle.motion.velocity.x+particle.motion.force.x, y:particle.motion.velocity.y+particle.motion.force.y}, rotation.z, height);
+          const quad=stretchedBillboard(emitter.renderer, width, {
+            x:particle.motion.velocity.x+particle.motion.force.x+(particle.motion.orbital?.x || 0),
+            y:particle.motion.velocity.y+particle.motion.force.y+(particle.motion.orbital?.y || 0)
+          }, rotation.z, height);
           const sprite = {x:point.x+quad.offset.x, y:-(point.y+quad.offset.y), width:quad.width, height:quad.height, angle:-quad.angle,
             region, color, gain:emitter.gain, blendSrc:emitter.blendSrc, blendDst:emitter.blendDst,
             multiply:emitter.multiply, lumaAlpha:emitter.lumaAlpha,

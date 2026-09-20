@@ -72,11 +72,19 @@ evaluates the current population without advancing it, then submits each sprite
 to the shared renderer. Rendering a paused frame therefore does not change the
 simulation state.
 
+We use authored orbital X/Y/Z speeds, orbit offsets, and radial speed in the
+particle's local space. We use a deterministic midpoint step for that motion.
+This follows the documented behavior of those fields, but the exact Unity tick
+and random sequence are not verified. We treat the resulting positions as an
+approximation until they can be checked against matched playback frames.
+
 ### Material and blend matrix
 
 We choose a particle rule from the shader name, the material's blend bindings,
 and the decoded texture formats. The shader name alone does not determine the
 blend mode. We read `_BlendSrc` and `_BlendDst` for each material instance.
+We also preserve source-color and inverse-destination-color factors when a
+material uses them. We do not replace these factors with alpha blending.
 
 | Shader family | Fragment calculation | Alpha input | Blend handling |
 |---|---|---|---|
@@ -96,6 +104,9 @@ We have checked these material bindings in representative bundles:
 | 100108 leaves | `TexAlpha/Simple/Blend` | 5 / 10 | ETC_RGB4 + ETC_RGB4 | Mask red channel |
 | 100281 water splashes | `Simple/Blend` | 5 / 1 | ETC_RGB4, no mask | Main texture |
 | 100398 flower effects | `TexAlpha/Standard/Blend` | 5 / 1 | ETC_RGB4 + ETC_RGB4 | Mask red channel |
+| 101138 circle effects | `Standard/Blend` | 4 / 1 | ETC_RGB4, no mask | Main texture |
+| 101287 smoke effects | `TexAlpha/Simple/Blend` | 4 / 1 | ETC_RGB4 + ETC_RGB4 | Mask red channel |
+| 300815, 300895, 301056 effects | `Standard/Blend` | 3 / 1 | ETC_RGB4, no mask | Main texture |
 
 We map factor 5 to `SRC_ALPHA`, 1 to `ONE`, and 10 to
 `ONE_MINUS_SRC_ALPHA`. We also support shader bindings that use
@@ -131,12 +142,26 @@ We treat Shape type 8 as ConeVolume. We sample birth positions throughout its
 authored length and angle. This gives sleeve and other volume emitters a spread
 at birth rather than collapsing them to the emitter centre. The exact Unity
 sampling distribution still needs a visual comparison.
+We also mirror the initial travel direction when a Shape axis has a negative
+scale. This lets emitters with a negative forward scale send particles across
+the card in the authored direction, including the leaves on card 101063.
+
+We emit particles from the bundle's timed bursts as well as its continuous
+rate. We use each burst's count, repeat interval, cycle limit, and probability.
+We include bursts during prewarm and repeat them when the system loops. This
+restores intermittent effects such as flying leaves on card 101063. Our fixed
+step schedule is stable across browser frame rates, while the exact Unity
+random sequence remains unverified.
 
 We apply the bundle's Noise settings to particle position, size, and rotation.
-We evaluate size against the same deterministic field used for position. We
+We evaluate size against the same deterministic noise sample used for position,
+but do not apply the position field's frequency-dependent displacement gain to
+particle size. This keeps low-frequency Noise from collapsing or excessively
+enlarging otherwise visible sprites. We
 integrate rotation during fixed simulation ticks, so browser frame partitioning
 does not change its accumulated angle. The field and its channel mapping are
-approximations, not a claim of exact Unity output.
+approximations, not a claim of exact Unity output. We still need a visual check
+of the size distribution on cards that use `NoiseModule.sizeAmount`.
 We retain `NoiseModule.quality` in the parsed scene data, but the substitute
 field does not yet reproduce its sampling behavior. We list it separately in
 the local coverage report.
@@ -152,7 +177,7 @@ The following are outside the current browser model:
 
 - Exact random/noise kernels, version-specific Noise behavior, and camera-specific 3D Billboard perspective.
 - Mesh particle layouts other than the embedded Float32 geometry and the observed Unity default Quad. We rotate these in 3D and project them into the 2D preview. We leave other layouts out instead of presenting their texture as a billboard.
-- Burst emission, rate over distance, trails, collision, sub-emitters, and external force fields.
+- Rate over distance, trails, collision, sub-emitters, and external force fields.
 - Camera-bone binding, startup simulation policy, runtime scale compensation, clipping timing, soft particles, and post-processing.
 - Distance sorting within an emitter and exact resolution of render-queue, depth, or equal-order ties.
 

@@ -2,6 +2,26 @@ import {sample, rotateShape} from './particle-math.js';
 import {randomSequence, noiseEffects} from './particle-simulation.js';
 
 const axes = ['x','y','z'];
+const orbitalKeys = ['orbitalX','orbitalY','orbitalZ','orbitalOffsetX','orbitalOffsetY','orbitalOffsetZ','radial'];
+
+const curveActive = curve => {
+  if (!curve) return false;
+  if (curve.minMaxState === 0) return !!curve.scalar;
+  if (curve.minMaxState === 3) return !!curve.scalar || !!curve.minScalar;
+  return !!curve.scalar && [curve.maxCurve,curve.minCurve]
+    .some(part => part?.m_Curve?.some(key => !!key.value));
+};
+
+// Orbital speed is tangential to the radius from the authored offset.
+// The integration below is a deterministic approximation of Unity's native
+// particle update, not a claim of an identical random sequence or integrator.
+export function orbitalVelocity(position, center, angular, radialSpeed = 0) {
+  const x=position.x-center.x, y=position.y-center.y, z=position.z-center.z;
+  const length=Math.hypot(x,y,z), radial=length>1e-9 ? radialSpeed/length : 0;
+  return {x:angular.y*z-angular.z*y+radial*x,
+    y:angular.z*x-angular.x*z+radial*y,
+    z:angular.x*y-angular.y*x+radial*z};
+}
 
 const scalar = (curve, fallback = 1) => curve?.value ?? fallback;
 const diskRadius = (shape, random) => {
@@ -78,7 +98,12 @@ export function sampleShape(shape, random) {
   } else {
     throw new Error(`Unsupported particle shape ${shape.type}`);
   }
-  for (const axis of axes) position[axis] *= shape.m_Scale[axis];
+  for (const axis of axes) {
+    position[axis] *= shape.m_Scale[axis];
+    // A mirrored Shape axis also mirrors its emission direction. In
+    // particular, a negative Z scale reverses a cone's forward direction.
+    if (shape.m_Scale[axis] < 0) direction[axis] *= -1;
+  }
   position = rotateShape(position,shape.m_Rotation);
   direction = rotateShape(direction,shape.m_Rotation);
   for (const axis of axes) position[axis] += shape.m_Position[axis];
@@ -88,6 +113,8 @@ export function sampleShape(shape, random) {
 // Motion is integrated at simulation ticks, never at browser draw frequency.
 // Local and world displacements stay separate until the hierarchy is applied.
 export function motionHooks(system) {
+  const orbitEnabled = system.VelocityModule?.enabled &&
+    ['orbitalX','orbitalY','orbitalZ','radial'].some(key => curveActive(system.VelocityModule[key]));
   const rotationNoise = system.NoiseModule?.enabled &&
     (Math.abs(system.NoiseModule.rotationAmount?.scalar || 0) > 1e-12 ||
       Math.abs(system.NoiseModule.rotationAmount?.minScalar || 0) > 1e-12);
@@ -97,7 +124,9 @@ export function motionHooks(system) {
       const {position,direction} = sampleShape(system.ShapeModule,random);
       const speed = sample(system.InitialModule.startSpeed,random(),particle.phase);
       particle.motion = {position, world:{x:0,y:0,z:0}, velocity:Object.fromEntries(axes.map(a=>[a,direction[a]*speed])),
-        force:{x:0,y:0,z:0}, forceWorld:{x:0,y:0,z:0}, random, weights:axes.map(()=>random()), modifier:random()};
+        force:{x:0,y:0,z:0}, forceWorld:{x:0,y:0,z:0}, orbital:{x:0,y:0,z:0},
+        random, weights:axes.map(()=>random()), modifier:random()};
+      if (orbitEnabled) particle.motion.orbitWeights=orbitalKeys.map(()=>random());
     },
     step(particle, delta, age) {
       const state = particle.motion, force = system.ForceModule, velocity = system.VelocityModule;
@@ -112,6 +141,23 @@ export function motionHooks(system) {
         state.position[axis] += (state.velocity[axis]+state.force[axis]+(velocity?.inWorldSpace?0:extra))*modifier*delta;
         state.world[axis] += (state.forceWorld[axis]+(velocity?.inWorldSpace?extra:0))*modifier*delta;
         accumulated[axis] += halfForce;
+      }
+      if (orbitEnabled) {
+        // Unity's Space selector applies to linear XYZ. Orbital and radial
+        // movement use the particle system's local axes and offset center.
+        const weight=key=>state.orbitWeights[orbitalKeys.indexOf(key)];
+        const center=Object.fromEntries(axes.map(axis=>[axis,
+          sample(velocity[`orbitalOffset${axis.toUpperCase()}`],weight(`orbitalOffset${axis.toUpperCase()}`),t)]));
+        const angular=Object.fromEntries(axes.map(axis=>[axis,
+          sample(velocity[`orbital${axis.toUpperCase()}`],weight(`orbital${axis.toUpperCase()}`),t)]));
+        const radial=sample(velocity.radial,weight('radial'),t);
+        const first=orbitalVelocity(state.position,center,angular,radial);
+        const midpoint=Object.fromEntries(axes.map(axis=>[axis,state.position[axis]+first[axis]*modifier*delta/2]));
+        const second=orbitalVelocity(midpoint,center,angular,radial);
+        for (const axis of axes) {
+          state.orbital[axis]=second[axis]*modifier;
+          state.position[axis]+=state.orbital[axis]*delta;
+        }
       }
       if (rotationNoise) {
         state.noiseRotation = (state.noiseRotation || 0) +

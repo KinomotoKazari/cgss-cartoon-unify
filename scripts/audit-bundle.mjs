@@ -37,12 +37,22 @@ for (const object of resolver.objects.values()) {
     }
     if (object.type === 'Shader') {
       // Shader platform payloads are LZ4-compressed independently of UnityFS.
-      entry.platformPrograms = data.platforms.map((platform, i) => {
-        const packed = new Uint8Array(data.compressedBlob).subarray(data.offsets[i], data.offsets[i] + data.compressedLengths[i]);
-        const unpacked = decompress(packed, data.decompressedLengths[i], 2);
-        const text = new TextDecoder().decode(unpacked);
-        shaderPrograms.push(text);
-        return {platform, sha256:hash(unpacked), bytes:unpacked.length, text};
+      entry.platformPrograms = data.platforms.flatMap((platform, i) => {
+        // Newer serialized shaders store one length/offset per variant inside
+        // each platform entry. Older bundles store scalar values instead.
+        const asList = value => Array.isArray(value) ? value : [value];
+        const offsets = asList(data.offsets[i]);
+        const lengths = asList(data.compressedLengths[i]);
+        const sizes = asList(data.decompressedLengths[i]);
+        if (offsets.length !== lengths.length || offsets.length !== sizes.length)
+          throw new Error(`Mismatched shader program ranges for platform ${platform}`);
+        return offsets.map((offset, variant) => {
+          const packed = new Uint8Array(data.compressedBlob).subarray(offset, offset + lengths[variant]);
+          const unpacked = decompress(packed, sizes[variant], 2);
+          const text = new TextDecoder().decode(unpacked);
+          shaderPrograms.push(text);
+          return {platform, variant, sha256:hash(unpacked), bytes:unpacked.length, text};
+        });
       });
     }
   } catch (error) { entry.error = error.message; }
