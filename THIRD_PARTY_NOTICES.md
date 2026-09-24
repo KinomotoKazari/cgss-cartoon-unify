@@ -4,12 +4,6 @@
 
 We used [AssetStudio](https://github.com/Perfare/AssetStudio) as the reference for the UnityFS, SerializedFile, TypeTree, and shared-string handling. `src/common-strings.js` adapts its shared string table. AssetStudio is MIT licensed. Its text is in [licenses/AssetStudio-MIT.txt](licenses/AssetStudio-MIT.txt). We do not distribute or load AssetStudio binaries.
 
-## CGSS Resource Tool
-
-The current player does not use CGSS Resource Tool's playback pipeline. We acknowledge [BA-Momoi's CGSS Resource Tool](https://github.com/BA-Momoi/cgss-resource-tool) and its `spine_preview` as earlier inspiration for RGB/A8 atlas composition, coordinate conversion, scene fitting, and Spine blend-mode handling. The project is available under the MIT License. Its notice is included in [licenses/CGSS-Resource-Tool-MIT.txt](licenses/CGSS-Resource-Tool-MIT.txt).
-
-No CGSS Resource Tool application files are bundled as a runtime dependency.
-
 ## MDUI
 
 We are very thankful to [MDUI](https://www.mdui.org/) for its Material Design direction, which inspired the local interface. No MDUI source or package files are bundled. MDUI is available under the MIT License. Its notice is included in [licenses/MDUI-MIT.txt](licenses/MDUI-MIT.txt).

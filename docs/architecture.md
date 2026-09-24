@@ -65,8 +65,17 @@ runtime owns particle and WebGL resources. Disposal is idempotent. If viewer
 construction fails first, the viewer releases already-created particle and
 renderer resources before rethrowing the original failure.
 
-We generate standalone copies with `npm run sync:standalone`. We use
-`npm run check:standalone` to report drift.
+We generate standalone copies and both readable and minified MediaWiki players with
+`npm run sync:standalone`. We use `npm run check:standalone` to report drift.
+The MediaWiki build reuses the canonical loader and rendering modules. It reads one
+requested card at runtime and does not embed card assets in the script. It can
+resolve one `.tiff`-named bundle or combine the ordered parts listed by the
+deployment manifest. We preserve the square scene coordinates and crop only
+the MediaWiki container to the main background attachment boundary. We prefer an
+exact case-insensitive `bg` slot, then fall back to the largest normally blended
+card-shaped attachment for older names such as `bg3`.
+We generate `mediawiki/cgss-mediawiki.min.js` from the readable script after each
+MediaWiki build.
 
 ## Current limits
 

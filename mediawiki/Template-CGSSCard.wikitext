@@ -1,0 +1,1 @@
+<div class="cgss-mediawiki-card" data-cgss-card="{{{1|}}}" data-cgss-manifest-title="cgss-card-bundles.json.tiff"></div>

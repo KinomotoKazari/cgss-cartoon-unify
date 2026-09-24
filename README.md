@@ -2,12 +2,13 @@
 
 `cgss-cartoon-unify` previews CGSS (シンデレラガールズスターライトステージ / デレステ / Deresute / Cinderella Girls: Starlight Stage) `card_cartoon_*.unity3d` bundles in a browser. We read UnityFS data, resolve the card's Spine and particle assets, decode textures, and render the animation locally. The selected bundle stays in the browser.
 
-The repository has two ready-to-use browser entries:
+The repository has three browser entries:
 
 | Entry | Location | Intended use |
 |---|---|---|
 | Desktop preview | `web/` | Run the repository's small Python server for a local preview. |
 | Standalone player | `web-cartoon-player/` | Copy or host this self-contained HTML, CSS, and JavaScript folder with any static HTTP server. It has no Python, Node.js, PowerShell, .NET, or AssetStudio runtime dependency. |
+| MediaWiki script | `mediawiki/cgss-mediawiki.js` and `mediawiki/cgss-mediawiki.min.js` | Readable and minified builds of one generated player script. A wiki template provides a card ID, and the script uses a `.tiff`-named manifest to fetch one whole bundle or combine its listed parts. See [MediaWiki integration](mediawiki/README.md) before public deployment. |
 
 Game bundles and extracted assets are not included. The images below demonstrate the player with game content. Select a bundle you are entitled to use.
 
@@ -19,7 +20,7 @@ We built a browser-based bundle player and inspection tool:
 - **Bring particle effects into the preview.** We added playback for referenced particle prefabs, including the bubbles and light specks in the Yukimi example below. The loader follows prefab, renderer, material, and texture references instead of guessing which images to load from their filenames. Cards without particle prefabs also work. Playback uses a subset of Unity particle data with explicit simulation and presentation stages.
 - **Make the particle data inspectable.** The separate emitter inspector projects authored positions and source volumes onto the card, and exposes textures, materials, transforms, lifetime, emission settings, and sorting metadata.
 - **Document the rendering model.** We record the asset relationships, the reference game's native playback pipeline as an implementation guide, separate RGB/A8 textures, blending, and the limits of the browser renderer. [Particle and shader analysis](docs/rendering.md) explains the current behaviour and remaining work.
-- **Package it for reuse.** The project includes a Python-launched local preview, a standalone static site, and a bare player entry for embedding. Parsing runs in a Worker, and shared modules keep the two distributions aligned.
+- **Package it for reuse.** The project includes a Python-launched local preview, a standalone static site, a bare player entry, and a generated single-file MediaWiki player. The main and standalone entries parse in a Worker. The MediaWiki entry parses on the page's main thread and fetches only the requested card bundle.
 
 ## Why the current renderer is different
 
@@ -57,8 +58,8 @@ shows the supported paths and labels the remaining approximations.
 
 ## Compatibility work
 
-We ran a static bundle and particle-property coverage check across **1566 card bundles**.
-All 1566 loaded in that check. We use the results and visual comparisons to keep
+We ran a static bundle and particle-property coverage check across **1,566 card bundles**.
+All 1,566 loaded in that check. We use the results and visual comparisons to keep
 improving material handling, particle placement, and animation playback. This
 check does not mean every card has been visually verified or that every effect
 already matches the game.
@@ -73,6 +74,7 @@ in shared playback behavior:
 - **100398:** We now apply X and Y particle rotation so the cherry-blossom light pattern can tilt across the stage floor.
 - **200674:** We fixed UTF-8 attachment-name decoding so the skeleton can find its matching atlas regions.
 - **201389:** We stopped applying the extra RGB alpha mask to additive bubbles, restoring their intended visibility.
+- **201291:** We corrected the shared Shape type mapping for Circle, Edge, BoxShell, BoxEdge, Donut, and Rectangle emitters. We now launch Circle particles radially from the authored ring. We align the local X axis of Stretch Billboard textures with motion, place texture U=0 at the motion-facing head, and anchor that head at the simulated endpoint so its tail grows behind it. We enforce the authored screen-space particle-size limit so launch streaks keep their intended extent. We wait for the first minimum-distance trail segment, then keep its live head attached and retain vertices for the authored particle-relative lifetime. This restores the rise-to-burst alignment and the transition from burst points into the orange, yellow, and purple falling paths.
 
 We added targeted checks for these behaviors. We still rely on visual review to
 judge how closely each effect matches the game's presentation.
@@ -190,9 +192,13 @@ We use representative particle and non-particle cards during maintenance. We rep
 | `web/` | Desktop pages and canonical shared viewer, load-session, and inspector modules. |
 | `runtime/` | Spine 3.6 and CGSS skeleton runtime used by the desktop preview. |
 | `web-cartoon-player/` | Self-contained static player. `index.html` is the card preview, `emitter_debug.html` is the emitter diagnostic, and `player.html` is the unstyled embed entry. Its `src/` and `runtime/` copies let it be served independently. |
+| `mediawiki/` | Generated readable and minified single-file wiki players with integration notes. We keep card bundles outside these scripts. |
 | `run.py` | Standard-library local static server for `web/`. |
 | `tests/` | Parser tests, optional real-bundle integration checks, and browser smoke checks. |
-| `scripts/sync-standalone.mjs` | Synchronizes shared JavaScript into the standalone folder. `--check` reports drift without writing. |
+| `scripts/sync-standalone.mjs` | Synchronizes the standalone folder and both MediaWiki scripts. `--check` reports drift without writing. |
+| `scripts/build-mediawiki.mjs` | Builds the readable MediaWiki script from canonical player modules and then refreshes its minified copy. |
+| `scripts/minify-mediawiki.mjs` | Minifies the generated MediaWiki script while preserving its complete license header. |
+| `scripts/package-mediawiki-bundles.mjs` | Renames small card bundles with the allowed `.tiff` suffix, splits larger bundles below the upload limit, and writes the MediaWiki manifest. |
 | `docs/validation.md` | Scope and results of the verification work. |
 | `docs/rendering.md` | Particle discovery, playback approximation, and shader/compositing analysis. |
 | `licenses/`, `THIRD_PARTY_NOTICES.md` | Third-party notices and license texts. |
@@ -218,28 +224,33 @@ We use representative particle and non-particle cards during maintenance. We rep
 
 ## Remaining limits
 
-We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, supported Simple, Standard, TexAlpha, and Multiply particle materials, Box, cone-base, and single-sided edge emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, timed and repeating emission bursts, size curves, and gravity. We also apply orbital and radial velocity with a deterministic midpoint approximation. We submit all scene geometry in render-plan order to one WebGL target. We use embedded Float32 mesh geometry and the observed Unity default Quad when a particle renderer supplies them. We also keep distinct X/Y particle sizes, Billboard pivots, and X/Y/Z rotation when projecting tilted effects into the card preview. We leave unsupported mesh layouts out rather than drawing a misleading full-frame texture. We use one deterministic approximation for Noise-driven position, size, and rotation across the Unity versions in the tested bundles. Exact orbital integration and random/noise kernels, camera-dependent sorting, camera-bone binding, startup policy, and camera-specific 3D projection remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
+We provide a focused particle implementation rather than a complete Unity implementation. We evaluate authored RGB/alpha gradients, supported Simple, Standard, TexAlpha, and Multiply particle materials, Box, BoxShell, BoxEdge, Circle, CircleEdge, cone-base, cone-volume, Donut, Rectangle, and single-sided edge emission, and fixed-step force/velocity motion. We support birth/death timing, seeds, prewarm, timed and repeating emission bursts, size curves, and gravity. We also apply orbital and radial velocity with a deterministic midpoint approximation. We submit all scene geometry in render-plan order to one WebGL target. We use embedded Float32 mesh geometry and the observed Unity default Quad when a particle renderer supplies them. We also keep distinct X/Y particle sizes, Billboard pivots, and X/Y/Z rotation when projecting tilted effects into the card preview. We leave unsupported mesh layouts out rather than drawing a misleading full-frame texture. We use one deterministic approximation for Noise-driven position, size, and rotation across the Unity versions in the tested bundles. Exact orbital integration and random/noise kernels, camera-dependent sorting, camera-bone binding, startup policy, and camera-specific 3D projection remain unresolved. See [Rendering model](docs/rendering.md) for supported parameters and limits.
 
 The CGSS skeleton parser supports the custom binary header used by the tested cards. Other skeleton formats and exhaustive malformed-input handling need separate parser work. The current tests do not prove support for every CGSS asset.
 
-The standalone folder contains committed copies so it can be hosted on its own. Run `npm run sync:standalone` after changing shared code, then run `npm run check:standalone`. The script defines the synchronized page modules. Standalone HTML, CSS, `player.js`, and `standalone.js` are maintained directly.
+The standalone folder contains committed copies so it can be hosted on its own. The readable and minified MediaWiki scripts are also generated and committed. Run `npm run sync:standalone` after changing shared code, then run `npm run check:standalone`. Standalone HTML, CSS, `player.js`, and `standalone.js` are maintained directly.
 
 ## Validation
 
-We cover parser failures, particle simulation, render-plan order, playback lifecycle, and WebGL submission state with focused checks. We also maintain browser smoke checks for both distributions. [Validation](docs/validation.md) records the public test commands and scope.
+We cover parser failures, particle simulation, render-plan order, playback lifecycle, and WebGL submission state with focused checks. We also maintain browser smoke checks for the desktop, standalone, and MediaWiki entries. [Validation](docs/validation.md) records the public test commands and scope.
 
 ## Development checks
 
-Node.js is used for development checks and syncing shared files, not for running either player.
+Node.js is used for development checks and generating shared files, not for running the browser players.
+We install the development dependencies once before running the generators:
 
-The canonical parser and runtime sources are in `src/` and `runtime/`. Shared viewer and loading modules live in `web/`. After editing these files, update the standalone copies and check for drift:
+```sh
+npm install
+```
+
+The canonical parser and runtime sources are in `src/` and `runtime/`. Shared viewer and loading modules live in `web/`. After editing these files, update both generated outputs and check for drift:
 
 ```sh
 npm run sync:standalone
 npm run check:standalone
 ```
 
-The standalone HTML, CSS, `player.js`, and `standalone.js` are maintained directly in `web-cartoon-player/`. The sync script only copies shared JavaScript and adjusts the worker's relative URL. Users do not need Node.js to run the resulting folder.
+The standalone HTML, CSS, `player.js`, and `standalone.js` are maintained directly in `web-cartoon-player/`. The sync script copies its shared JavaScript, adjusts the worker's relative URL, rebuilds `mediawiki/cgss-mediawiki.js`, and refreshes `mediawiki/cgss-mediawiki.min.js`. Users do not need Node.js to run either output.
 
 Shared entry scripts such as `embed-player.js` and `emitter-debug.js` are also synchronized. Edit their canonical versions in `web/`. Direct edits to synchronized copies are overwritten. HTML and CSS are not synchronized.
 
@@ -253,9 +264,10 @@ The optional browser smoke test requires Playwright and Edge:
 npm install --no-save --package-lock=false playwright
 node tests/browser-smoke.mjs /path/to/bundles
 node tests/standalone-browser-smoke.mjs /path/to/bundles
+node tests/mediawiki-browser-smoke.mjs /path/to/one/card_cartoon_301202.unity3d
 ```
 
-The first command starts `run.py`. Use `PYTHON` to select its Python executable. The second starts its own Node.js static server and does not need Python. Both accept `BROWSER_CHANNEL` to select another installed Playwright browser channel.
+The first command starts `run.py`. Use `PYTHON` to select its Python executable. The other two start their own Node.js static servers. All three accept `BROWSER_CHANNEL` to select another installed Playwright browser channel.
 
 See [Validation](docs/validation.md) for tested cards, assertions, and limits.
 
@@ -266,8 +278,6 @@ We thank [MDUI](https://www.mdui.org/) for its Material Design direction, which 
 We built the UnityFS, SerializedFile, TypeTree, and shared-string handling with [AssetStudio](https://github.com/Perfare/AssetStudio) as the reference. AssetStudio is MIT licensed. We do not distribute or load AssetStudio binaries.
 
 We bundle the Spine core and canvas runtime from [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) 3.6 by Esoteric Software. They are distributed under the Spine Runtimes Software License v2.5.
-
-We do not use CGSS Resource Tool's playback pipeline in the current ordered WebGL architecture. We still acknowledge [BA-Momoi's CGSS Resource Tool](https://github.com/BA-Momoi/cgss-resource-tool) and `spine_preview` for earlier inspiration around atlas handling, coordinates, scene fitting, and Spine blending. We retain the related MIT notice in this repository.
 
 ## License notices
 

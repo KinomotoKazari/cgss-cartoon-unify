@@ -1,6 +1,7 @@
 import {readFile, writeFile, readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
+import {buildMediaWiki} from './build-mediawiki.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const check = process.argv.includes('--check');
@@ -32,3 +33,11 @@ for (const [source, destination] of files) {
 }
 if (check && differences) process.exitCode = 1;
 else console.log(check ? 'Standalone shared files are in sync.' : 'Standalone shared files updated.');
+try {
+  const changed = await buildMediaWiki(check);
+  if (!check && changed) console.log('MediaWiki single-file player updated.');
+  if (check) console.log('MediaWiki single-file player is in sync.');
+} catch (error) {
+  console.error(error.message);
+  process.exitCode = 1;
+}

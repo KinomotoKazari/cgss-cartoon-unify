@@ -24,11 +24,22 @@ We run the complete Node suite with:
 node --test tests/*.test.mjs
 ```
 
-We keep standalone shared files synchronized with:
+We keep standalone shared files and both generated MediaWiki scripts synchronized with:
 
 ```sh
 npm run sync:standalone
 npm run check:standalone
+```
+
+We also execute the minified MediaWiki build in the Node test context and check
+that its full license header and readable-source pointer remain present.
+
+We test the MediaWiki deployment packager with the complete Node suite. The test
+recombines generated parts byte for byte and checks the manifest contract. We
+can prepare real uploads separately with:
+
+```sh
+npm run package:mediawiki-bundles -- /path/to/bundles /path/to/output
 ```
 
 ## Browser checks
@@ -41,13 +52,14 @@ entitled to use:
 npm install --no-save --package-lock=false playwright
 node tests/browser-smoke.mjs /path/to/bundles
 node tests/standalone-browser-smoke.mjs /path/to/bundles
+node tests/mediawiki-browser-smoke.mjs /path/to/one/card_cartoon_301202.unity3d
 ```
 
 We use `PYTHON` to select the Python executable for the desktop check. We use
 `BROWSER_CHANNEL` to select another Playwright browser channel when needed.
 
 Browser checks verify file loading, card replacement, playback controls, the
-static inspector, and the bare player. They report browser errors and unexpected
+static inspector, the bare player, and one-card MediaWiki loading. They report browser errors and unexpected
 POST requests. They are smoke checks. We still review card appearance manually
 when changing rendering behavior.
 

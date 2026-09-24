@@ -142,9 +142,44 @@ We treat Shape type 8 as ConeVolume. We sample birth positions throughout its
 authored length and angle. This gives sleeve and other volume emitters a spread
 at birth rather than collapsing them to the emitter centre. The exact Unity
 sampling distribution still needs a visual comparison.
+We map Shape types 10, 11, 12, 15, 16, 17, and 18 to Circle, CircleEdge,
+SingleSidedEdge, BoxShell, BoxEdge, Donut, and Rectangle. We sample Circle
+particles from the authored radius and radius thickness, then launch them in
+the radial direction. This restores the expanding ring geometry used by the
+fireworks on card 201291. We use the same mapping for every card.
 We also mirror the initial travel direction when a Shape axis has a negative
 scale. This lets emitters with a negative forward scale send particles across
 the card in the authored direction, including the leaves on card 101063.
+
+We orient Stretch Billboards from the same effective velocity used by particle
+motion. This includes VelocityModule XYZ, its speed modifier, accumulated
+forces, orbital movement, and the emitter transform. We calculate the authored
+base length relative to particle width. We place that length on the texture's
+local X axis and keep local Y as its cross width. This keeps rising firework
+tails aligned with their vertical motion instead of leaving a wide horizontal
+quad. We map texture U=0 to the motion-facing end for this render mode. The
+bright launch head therefore rises above the fading exhaust instead of pulling
+the exhaust ahead of it. We also enforce the renderer's screen-space
+`m_MaxParticleSize` limit after stretching. This prevents long launch textures
+from becoming full-height lines while keeping the authored launch geometry.
+We anchor the motion-facing edge of a Stretch Billboard at the simulated
+particle position and extend the remaining quad backwards. This lets launch
+tails emerge progressively from their authored origin, prevents the visible
+head from overshooting the motion endpoint, and keeps it aligned with a burst
+authored at that endpoint.
+
+We retain TrailModule history at fixed simulation ticks. We use the authored
+lifetime multiplier, minimum vertex distance, ratio, width, color, color
+inheritance, and particle death policy. We multiply each trail lifetime by its
+owning particle lifetime as required by the stored TrailModule value. We wait
+for the particle to travel `minVertexDistance` before drawing its first ribbon
+segment. After that segment exists, we keep the attached head moving every tick
+between committed history vertices. We attach texture U=0 to that live head and
+fade toward U=1 at the oldest retained point. We
+resolve renderer material slot 1 independently and submit the trail strip
+through the same ordered WebGL target as its particle head. Advanced ribbon,
+world-space, lighting, and alternate texture modes remain listed by the local
+coverage report.
 
 We emit particles from the bundle's timed bursts as well as its continuous
 rate. We use each burst's count, repeat interval, cycle limit, and probability.
@@ -177,7 +212,7 @@ The following are outside the current browser model:
 
 - Exact random/noise kernels, version-specific Noise behavior, and camera-specific 3D Billboard perspective.
 - Mesh particle layouts other than the embedded Float32 geometry and the observed Unity default Quad. We rotate these in 3D and project them into the 2D preview. We leave other layouts out instead of presenting their texture as a billboard.
-- Rate over distance, trails, collision, sub-emitters, and external force fields.
+- Rate over distance, advanced trail modes, collision, sub-emitters, and external force fields.
 - Camera-bone binding, startup simulation policy, runtime scale compensation, clipping timing, soft particles, and post-processing.
 - Distance sorting within an emitter and exact resolution of render-queue, depth, or equal-order ties.
 
