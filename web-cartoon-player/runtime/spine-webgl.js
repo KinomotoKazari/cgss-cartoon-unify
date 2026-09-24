@@ -292,8 +292,9 @@
     var indices = [0,1,2,0,2,3], color = sprite.color, uv = sprite.region;
     for (var i = 0; i < indices.length; i++) {
       var p = corners[indices[i]], x = p[0]*sprite.width, y = p[1]*sprite.height;
+      var textureX = sprite.flipX ? 1-p[2] : p[2];
       this._push(null, sprite.x+x*c-y*s, sprite.y+x*s+y*c,
-        uv.u+p[2]*uv.width, uv.v+p[3]*uv.height, color.r, color.g, color.b, color.a);
+        uv.u+textureX*uv.width, uv.v+p[3]*uv.height, color.r, color.g, color.b, color.a);
     }
     this._flush();
     gl.colorMask(true, true, true, true);
@@ -328,8 +329,35 @@
       var x1 = p.x*cz - p.y*sz, y1 = p.x*sz + p.y*cz;
       var y2 = y1*cx - p.z*sx, z2 = y1*sx + p.z*cx;
       var x3 = x1*cy + z2*sy, y3 = y2;
+      var textureX = sprite.flipX ? 1-p.u : p.u;
       this._push(null, sprite.x + x3*sprite.width, sprite.y - y3*sprite.height,
-        uv.u + p.u*uv.width, uv.v + p.v*uv.height, color.r, color.g, color.b, color.a);
+        uv.u + textureX*uv.width, uv.v + p.v*uv.height, color.r, color.g, color.b, color.a);
+    }
+    this._flush();
+    gl.colorMask(true, true, true, true);
+  };
+
+  CGSSWebGLRenderer.prototype.drawParticleTrail = function (image, trail) {
+    var gl = this.gl;
+    this._flush();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this._texture(image));
+    gl.useProgram(this.program);
+    gl.enable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.blendEquation(gl.FUNC_ADD);
+    this._setParticleBlend(trail);
+    var mask = trail.colorMask ?? 14;
+    gl.colorMask(!!(mask & 8), !!(mask & 4), !!(mask & 2), !!(mask & 1));
+    gl.uniform1f(this.uParticle, 1);
+    gl.uniform1f(this.uParticleMask, trail.maskAlpha ? 1 : 0);
+    gl.uniform1f(this.uParticleMultiply, trail.multiply ? 1 : 0);
+    gl.uniform1f(this.uParticleLuma, trail.lumaAlpha ? 1 : 0);
+    gl.uniform1f(this.uGain, trail.gain);
+    for (var i = 0; i < trail.indices.length; i++) {
+      var vertex = trail.vertices[trail.indices[i]], color = vertex.color;
+      this._push(null, vertex.x, vertex.y, vertex.u, vertex.v,
+        color.r, color.g, color.b, color.a);
     }
     this._flush();
     gl.colorMask(true, true, true, true);

@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {sample, integral, particleScale, rotateShape, compareEmitters, stretchedBillboard} from '../web/particle-math.js';
+import {sample, integral, particleScale, rotateShape, compareEmitters, stretchedBillboard,
+  clampBillboard, trailPointSequence, trailTextureU} from '../web/particle-math.js';
 
 const linear = (a,b) => ({m_Curve:[{time:0,value:a,inSlope:b-a,outSlope:b-a},{time:1,value:b,inSlope:b-a,outSlope:b-a}]});
 test('emitter ordering uses layer then signed order with stable ties',()=>{
@@ -26,16 +27,44 @@ test('size scaling follows hierarchy, local and shape-only modes',()=>{
   const p=rotateShape({x:0,y:0,z:1},{y:90});
   assert.ok(Math.abs(p.x-1)<1e-9 && Math.abs(p.z)<1e-9);
 });
-test('stretch billboards use authored length, motion direction and pivot',()=>{
+test('stretch billboards anchor their forward edge at the simulated head',()=>{
   const quad=stretchedBillboard({m_RenderMode:1,m_LengthScale:10,m_VelocityScale:2,m_Pivot:{x:0,y:5}},4,{x:3,y:4});
-  assert.equal(quad.width,4); assert.equal(quad.height,50);
-  assert.ok(Math.abs(quad.angle-(Math.atan2(4,3)+Math.PI/2))<1e-12);
-  assert.deepEqual(quad.offset,{x:12,y:16});
+  assert.equal(quad.width,50); assert.equal(quad.height,4);
+  assert.ok(Math.abs(quad.angle-Math.atan2(4,3))<1e-12);
+  assert.ok(Math.abs(quad.offset.x+31)<1e-12);
+  assert.ok(Math.abs(quad.offset.y+8)<1e-12);
   assert.deepEqual(stretchedBillboard({m_RenderMode:0},4,{x:3,y:4},.5),{width:4,height:4,angle:.5,offset:{x:0,y:0}});
 });
 test('billboard 3D size and pivot keep distinct width and height',()=>{
   const quad=stretchedBillboard({m_RenderMode:0,m_Pivot:{x:.1,y:.4}},60,{x:0,y:0},0,160);
   assert.deepEqual(quad,{width:60,height:160,angle:0,offset:{x:6,y:64}});
   const stretch=stretchedBillboard({m_RenderMode:1,m_LengthScale:.5,m_VelocityScale:0},60,{x:0,y:0},0,160);
-  assert.equal(stretch.height,80);
+  assert.equal(stretch.width,30);
+  assert.equal(stretch.height,160);
+  assert.deepEqual(stretch.offset,{x:-15,y:0});
+});
+
+test('stretch billboard length is based on width and follows vertical velocity',()=>{
+  const quad=stretchedBillboard({m_RenderMode:1,m_LengthScale:2,m_VelocityScale:1},200,{x:0,y:20},0,40);
+  assert.equal(quad.width,420);
+  assert.equal(quad.height,40);
+  assert.ok(Math.abs(quad.angle-Math.PI/2)<1e-12);
+  assert.ok(Math.abs(quad.offset.x)<1e-12);
+  assert.ok(Math.abs(quad.offset.y+210)<1e-12);
+});
+test('trail texture starts at the live head and fades toward old points',()=>{
+  assert.equal(trailTextureU(1),0);
+  assert.equal(trailTextureU(0),1);
+});
+test('screen-space particle limit clamps the whole stretched billboard',()=>{
+  const quad=clampBillboard({width:1800,height:180,angle:0,offset:{x:90,y:18}},1400,.5);
+  assert.deepEqual(quad,{width:700,height:70,angle:0,offset:{x:35,y:7}});
+  assert.equal(clampBillboard(quad,1400,10),quad);
+});
+test('particle trails wait for a committed segment before attaching the live head',()=>{
+  const origin={age:0,position:{x:0,y:0,z:0}};
+  const head={age:.6,position:{x:11,y:0,z:0}};
+  assert.deepEqual(trailPointSequence([origin],head),[]);
+  const committed={age:.5,position:{x:10,y:0,z:0}};
+  assert.deepEqual(trailPointSequence([origin,committed],head),[origin,committed,head]);
 });

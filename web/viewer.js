@@ -67,10 +67,12 @@ export async function createViewer(card, canvas, getSpeed = () => 1) {
       const stateData = new spine.AnimationStateData(data); stateData.defaultMix = entry.defaultMix;
       const state = new spine.AnimationState(stateData);
       if (data.animations.length) state.setAnimation(0, data.animations[0].name, true);
-      return {layer:entry.layer, skeleton, state};
+      return {layer:entry.layer, slot:entry.slot, name:entry.name, skeleton, state};
     });
     const fit = fitScene(skeletons, canvas);
-    particles = await CGSSParticleOverlay.create({plan:card.plan, config:{particleImages:images, textureFormats:Object.fromEntries(card.textures.map(t=>[t.id,t.format]))}});
+    particles = await CGSSParticleOverlay.create({plan:card.plan, config:{particleImages:images,
+      textureFormats:Object.fromEntries(card.textures.map(t=>[t.id,t.format])),
+      viewportWorld:Math.min(canvas.width,canvas.height)/fit.scale}});
     glCanvas = document.createElement('canvas'); glCanvas.width = canvas.width; glCanvas.height = canvas.height;
     renderer = new CGSSWebGLRenderer(glCanvas, {preserveDrawingBuffer:true});
     const context = canvas.getContext('2d');

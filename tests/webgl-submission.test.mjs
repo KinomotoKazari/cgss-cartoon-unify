@@ -93,6 +93,16 @@ test('particle multiply and uncommon blend factors reach WebGL unchanged', t => 
   ]);
 });
 
+test('stretch particles can attach texture U zero to the motion-facing head', t => {
+  const f=fixture();t.after(()=>f.renderer.dispose());
+  const sprite={x:8,y:8,width:8,height:2,angle:Math.PI/2,
+    region:{u:0,v:0,width:1,height:1},color:white,gain:1,colorMask:14,flipX:true};
+  f.renderer.drawParticle({},sprite);
+  const u=[];
+  for(let index=2;index<f.draws[0].vertices.length;index+=8) u.push(f.draws[0].vertices[index]);
+  assert.deepEqual(u,[1,0,0,1,0,1]);
+});
+
 test('luminance-alpha particles select their own fragment equation', t => {
   const f = fixture(); t.after(() => f.renderer.dispose());
   f.renderer.drawParticle({}, {x:8,y:8,width:8,height:8,angle:0,
@@ -130,6 +140,20 @@ test('mesh particles project authored 3D rotations into a changing silhouette', 
   assert.ok(Math.abs(f.draws[1].vertices[1]+.125)<1e-6);
   assert.ok(Math.abs(f.draws[1].vertices[8]-.125)<1e-6);
   assert.ok(Math.abs(f.draws[2].vertices[8])<1e-6);
+});
+
+test('particle trails submit authored strip vertices and material state', t => {
+  const f=fixture();t.after(()=>f.renderer.dispose());
+  const image={};
+  f.renderer.drawParticleTrail(image,{vertices:[
+    {x:0,y:0,u:0,v:0,color:white},{x:0,y:2,u:0,v:1,color:white},
+    {x:8,y:0,u:1,v:0,color:white},{x:8,y:2,u:1,v:1,color:white}
+  ],indices:[0,1,2,1,3,2],gain:2,blendSrc:5,blendDst:1,colorMask:14});
+  assert.equal(f.draws.length,1);
+  assert.equal(f.draws[0].image,image);
+  assert.deepEqual(f.draws[0].blend,['SRC_ALPHA','ONE']);
+  assert.equal(f.draws[0].count,6);
+  assert.equal(f.draws[0].gain,2);
 });
 
 test('failed upload is released, unfinished geometry is discarded, and disposal is idempotent', () => {

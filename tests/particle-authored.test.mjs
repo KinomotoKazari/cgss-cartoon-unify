@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {sampleShape,motionHooks,orbitalVelocity,transformPoint} from '../web/particle-motion.js';
+import {sampleShape,motionHooks,orbitalVelocity,transformPoint,transformVector,effectiveVelocity} from '../web/particle-motion.js';
 import {ParticleSimulation,randomSequence} from '../web/particle-simulation.js';
 import {sampleColor,shadePixels} from '../web/particle-color.js';
 
@@ -39,7 +39,7 @@ test('negative Shape Z scale reverses cone travel without moving its base',()=>{
 });
 
 test('box shell emits on a transformed box surface',()=>{
-  const shape={enabled:true,type:10,m_Position:{x:3,y:4,z:5},m_Rotation:{},m_Scale:{x:10,y:20,z:30}};
+  const shape={enabled:true,type:15,m_Position:{x:3,y:4,z:5},m_Rotation:{},m_Scale:{x:10,y:20,z:30}};
   const sample=sampleShape(shape,()=>0);
   assert.deepEqual(sample.position,{x:-2,y:-6,z:-10});
   assert.deepEqual(sample.direction,{x:0,y:0,z:1});
@@ -60,9 +60,31 @@ test('cone volume births occupy its authored length and spread across its radius
 test('sphere, circle, donut, and rectangle shapes have stable samples',()=>{
   const base={enabled:true,m_Position:{x:0,y:0,z:0},m_Rotation:{},m_Scale:{x:1,y:1,z:1},radius:{value:2},radiusThickness:1,arc:{value:360}};
   assert.ok(Math.hypot(...Object.values(sampleShape({...base,type:0},()=>.5).position))<=2);
-  assert.ok(Math.abs(sampleShape({...base,type:12},()=>.5).position.y)<1e-12);
-  assert.ok(Number.isFinite(sampleShape({...base,type:15,donutRadius:.2},()=>.5).position.x));
-  assert.deepEqual(sampleShape({...base,type:16},()=>.5).position,{x:0,y:0,z:0});
+  assert.ok(Math.abs(sampleShape({...base,type:10},()=>.5).position.y)<1e-12);
+  assert.ok(Number.isFinite(sampleShape({...base,type:17,donutRadius:.2},()=>.5).position.x));
+  assert.deepEqual(sampleShape({...base,type:18},()=>.5).position,{x:0,y:0,z:0});
+});
+
+test('circle shape emits radially across its authored annulus',()=>{
+  const shape={enabled:true,type:10,m_Position:{x:0,y:0,z:0},m_Rotation:{},
+    m_Scale:{x:400,y:400,z:1},radius:{value:1},radiusThickness:.3,arc:{value:360}};
+  const random=randomSequence(201291);
+  for(let i=0;i<1000;i++) {
+    const {position,direction}=sampleShape(shape,random);
+    const radius=Math.hypot(position.x,position.y);
+    assert.ok(radius>=280 && radius<=400);
+    assert.ok(position.x*direction.x+position.y*direction.y>0);
+    assert.ok(Math.abs(Math.hypot(direction.x,direction.y)-1)<1e-12);
+    assert.equal(position.z,0);
+    assert.equal(direction.z,0);
+  }
+});
+
+test('edge, box edge, and rectangle shape ids keep their distinct geometry',()=>{
+  const base={enabled:true,m_Position:{x:0,y:0,z:0},m_Rotation:{},m_Scale:{x:2,y:4,z:6}};
+  assert.deepEqual(sampleShape({...base,type:12},()=>0).position,{x:-1,y:0,z:0});
+  assert.deepEqual(sampleShape({...base,type:16},()=>0).position,{x:-1,y:-2,z:-3});
+  assert.deepEqual(sampleShape({...base,type:18},()=>0).position,{x:-1,y:-2,z:0});
 });
 
 test('force integrates acceleration and speedModifier scales initial velocity too',()=>{
@@ -74,6 +96,19 @@ test('force integrates acceleration and speedModifier scales initial velocity to
   for(let i=0;i<60;i++) hooks.step(particle,1/60,(i+1)/60);
   assert.ok(Math.abs(particle.motion.position.x-3)<1e-10);
   assert.ok(Math.abs(particle.motion.position.z-6)<1e-10);
+});
+
+test('Stretch rendering sees VelocityModule motion and hierarchy orientation',()=>{
+  const system={ShapeModule:{enabled:false},InitialModule:{startSpeed:constant(0)},
+    VelocityModule:{enabled:true,x:constant(0),y:constant(20),z:constant(0),speedModifier:constant(.5)}};
+  const particle={seed:201291,phase:0,lifetime:5};
+  const hooks=motionHooks(system);hooks.initialize(particle);
+  const velocity=effectiveVelocity(system,particle,1);
+  assert.deepEqual(velocity.local,{x:0,y:10,z:0});
+  const rotated=transformVector(velocity.local,{data:{m_LocalScale:{x:2,y:3,z:1},
+    m_LocalRotation:{x:0,y:0,z:Math.SQRT1_2,w:Math.SQRT1_2}}});
+  assert.ok(Math.abs(rotated.x+30)<1e-12);
+  assert.ok(Math.abs(rotated.y)<1e-12);
 });
 
 test('orbital axes use the offset center and radial speed points away from it',()=>{

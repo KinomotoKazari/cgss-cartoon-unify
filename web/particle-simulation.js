@@ -29,13 +29,19 @@ export class ParticleSimulation {
 
   spawn(birth, phase) {
     const initial = this.system.InitialModule;
-    this.particles = this.particles.filter(p => p.birth + p.lifetime > birth + EPSILON);
-    if (this.particles.length >= (initial.maxNumParticles ?? 1000)) return;
+    this.particles = this.particles.filter(p => this.expiry(p) > birth + EPSILON);
+    const liveParticles=this.particles.filter(p => p.birth+p.lifetime > birth+EPSILON).length;
+    if (liveParticles >= (initial.maxNumParticles ?? 1000)) return;
     const lifetime = sample(initial.startLifetime, this.random(), phase);
     if (!(lifetime > 0)) return;
     const particle = {birth, lifetime, phase, seed: Math.floor(this.random() * 4294967296)};
     this.hooks.initialize?.(particle);
+    this.hooks.initializeTrail?.(particle);
     this.particles.push(particle);
+  }
+
+  expiry(particle) {
+    return this.hooks.expiresAt?.(particle) ?? particle.birth + particle.lifetime;
   }
 
   emitBursts(start, end, duration) {
@@ -97,7 +103,7 @@ export class ParticleSimulation {
         if (delta > 0) this.hooks.step?.(particle,delta,until-particle.birth);
       }
       this.time = end;
-      this.particles = this.particles.filter(p => p.birth + p.lifetime > this.time + EPSILON);
+      this.particles = this.particles.filter(p => this.expiry(p) > this.time + EPSILON);
       this.pending -= step;
     }
   }

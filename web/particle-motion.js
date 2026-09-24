@@ -38,6 +38,12 @@ const boxShell = random => {
   if (face===4) return {x:a,y:b,z:-.5};
   return {x:a,y:b,z:.5};
 };
+const boxEdge = random => {
+  const edge = Math.min(11,Math.floor(random()*12)), along=random()-.5;
+  if (edge<4) return {x:along,y:edge&1 ? .5 : -.5,z:edge&2 ? .5 : -.5};
+  if (edge<8) return {x:edge&1 ? .5 : -.5,y:along,z:edge&2 ? .5 : -.5};
+  return {x:edge&1 ? .5 : -.5,y:edge&2 ? .5 : -.5,z:along};
+};
 
 // Retain depth while composing prefab transforms, even for the orthographic preview.
 export function transformPoint(point, transform) {
@@ -47,6 +53,34 @@ export function transformPoint(point, transform) {
   return {x:x+q.w*tx+q.y*tz-q.z*ty+d.m_LocalPosition.x,
     y:y+q.w*ty+q.z*tx-q.x*tz+d.m_LocalPosition.y,
     z:z+q.w*tz+q.x*ty-q.y*tx+d.m_LocalPosition.z};
+}
+
+// Transform a direction through the same hierarchy as a particle position,
+// without applying translation.
+export function transformVector(vector, transform) {
+  const d = transform.data, q = d.m_LocalRotation;
+  const x=vector.x*d.m_LocalScale.x, y=vector.y*d.m_LocalScale.y, z=(vector.z ?? 0)*d.m_LocalScale.z;
+  const tx=2*(q.y*z-q.z*y), ty=2*(q.z*x-q.x*z), tz=2*(q.x*y-q.y*x);
+  return {x:x+q.w*tx+q.y*tz-q.z*ty,
+    y:y+q.w*ty+q.z*tx-q.x*tz,
+    z:z+q.w*tz+q.x*ty-q.y*tx};
+}
+
+// Return the instantaneous velocity used by rendering. VelocityModule and its
+// speed modifier must affect Stretch Billboard orientation as well as motion.
+export function effectiveVelocity(system, particle, age) {
+  const state=particle.motion, velocity=system.VelocityModule;
+  const t=Math.max(0,Math.min(1,age/particle.lifetime));
+  const modifier=velocity?.enabled && velocity.speedModifier
+    ? sample(velocity.speedModifier,state.modifier,t) : 1;
+  const local={}, world={};
+  for(const [i,axis] of axes.entries()) {
+    const extra=velocity?.enabled ? sample(velocity[axis],state.weights[i],t) : 0;
+    local[axis]=(state.velocity[axis]+state.force[axis]+(velocity?.inWorldSpace?0:extra))*modifier
+      +(state.orbital?.[axis] || 0);
+    world[axis]=(state.forceWorld[axis]+(velocity?.inWorldSpace?extra:0))*modifier;
+  }
+  return {local,world};
 }
 
 // Cone emits from its base disk. Its length is only used by cone-volume shapes.
@@ -83,15 +117,24 @@ export function sampleShape(shape, random) {
   } else if (shape.type === 5) {
     position = {x:random()-.5,y:random()-.5,z:random()-.5};
   } else if (shape.type === 10) {
-    position = boxShell(random);
-  } else if (shape.type === 12) {
     const theta=angle(shape,random), radius=diskRadius(shape,random);
     position={x:Math.cos(theta)*radius,y:Math.sin(theta)*radius,z:0};
+    direction={x:Math.cos(theta),y:Math.sin(theta),z:0};
+  } else if (shape.type === 11) {
+    const theta=angle(shape,random), radius=scalar(shape.radius);
+    position={x:Math.cos(theta)*radius,y:Math.sin(theta)*radius,z:0};
+    direction={x:Math.cos(theta),y:Math.sin(theta),z:0};
+  } else if (shape.type === 12) {
+    position={x:random()-.5,y:0,z:0};
   } else if (shape.type === 15) {
+    position = boxShell(random);
+  } else if (shape.type === 16) {
+    position = boxEdge(random);
+  } else if (shape.type === 17) {
     const theta=random()*Math.PI*2, phi=random()*Math.PI*2;
     const major=scalar(shape.radius), minor=major*(shape.donutRadius ?? .2)*Math.sqrt(random());
     position={x:(major+minor*Math.cos(phi))*Math.cos(theta),y:(major+minor*Math.cos(phi))*Math.sin(theta),z:minor*Math.sin(phi)};
-  } else if (shape.type === 16 || shape.type === 17 || shape.type === 18) {
+  } else if (shape.type === 18) {
     // The sampled bundles provide no Sprite or SpriteRenderer reference. Their
     // authored scale therefore defines the available rectangular emission area.
     position={x:random()-.5,y:random()-.5,z:0};
@@ -163,6 +206,39 @@ export function motionHooks(system) {
         state.noiseRotation = (state.noiseRotation || 0) +
           noiseEffects(system.NoiseModule,state.position,age,particle.lifetime,particle.seed).angularVelocity*delta;
       }
+      if (particle.trail?.enabled) {
+        const points=particle.trail.points, candidate={age,
+          position:{...state.position},world:{...state.world}};
+        const previous=points.at(-1), threshold=Math.max(0,system.TrailModule.minVertexDistance || 0);
+        const distance=previous ? Math.hypot(
+          candidate.position.x+candidate.world.x-previous.position.x-previous.world.x,
+          candidate.position.y+candidate.world.y-previous.position.y-previous.world.y,
+          candidate.position.z+candidate.world.z-previous.position.z-previous.world.z) : Infinity;
+        if (!previous || distance>=threshold) points.push(candidate);
+        // minVertexDistance controls committed ribbon vertices. Unity still
+        // moves the attached trail head every tick between those vertices.
+        particle.trail.head=candidate;
+      }
+    },
+    expiresAt(particle) {
+      const death=particle.birth+particle.lifetime;
+      return particle.trail?.enabled && !system.TrailModule.dieWithParticles
+        ? death+particle.trail.lifetime : death;
+    },
+    initializeTrail(particle) {
+      if (!system.TrailModule?.enabled) return;
+      const random=randomSequence(particle.seed ^ 0x74726169);
+      const enabled=random() < (system.TrailModule.ratio ?? 1);
+      // TrailModule lifetime is a multiplier of the owning particle lifetime,
+      // rather than an absolute number of seconds.
+      let lifetime=Math.max(0,sample(system.TrailModule.lifetime,random(),0))*particle.lifetime;
+      if(system.TrailModule.sizeAffectsLifetime) {
+        const particleRandom=randomSequence(particle.seed);
+        particleRandom();
+        lifetime*=Math.max(0,sample(system.InitialModule.startSize,particleRandom(),particle.phase));
+      }
+      const origin={age:0,position:{...particle.motion.position},world:{...particle.motion.world}};
+      particle.trail={enabled,lifetime,points:enabled ? [origin] : [],head:enabled ? origin : null};
     }
   };
 }

@@ -49,6 +49,38 @@ test('bursts use authored time, repeat interval, cycle count, and loop',()=>{
   delayedSim.advance(4);
   assert.deepEqual(delayedSim.particles.map(p=>p.birth),[1.5,2,2.5]);
 });
+
+test('trails retain history after particle death only when authored',()=>{
+  const data=system(0);
+  data.looping=false;
+  data.ShapeModule={enabled:false};
+  data.InitialModule.startLifetime=constant(.2);
+  data.InitialModule.startSpeed=constant(1);
+  data.EmissionModule.m_Bursts=[{time:0,countCurve:constant(1),cycleCount:1,probability:1}];
+  data.TrailModule={enabled:true,ratio:1,lifetime:constant(2),minVertexDistance:0,dieWithParticles:false};
+  const sim=new ParticleSimulation(data,1,motionHooks(data));
+  sim.advance(.5);
+  assert.equal(sim.particles.length,1);
+  assert.ok(Math.abs(sim.particles[0].trail.lifetime-.4)<1e-9);
+  assert.ok(sim.particles[0].trail.points.length>1);
+  sim.advance(.2);
+  assert.equal(sim.particles.length,0);
+});
+test('trail head follows motion below the committed vertex distance',()=>{
+  const data=system(0);
+  data.looping=false;
+  data.ShapeModule={enabled:false};
+  data.InitialModule.startLifetime=constant(2);
+  data.InitialModule.startSpeed=constant(1);
+  data.EmissionModule.m_Bursts=[{time:0,countCurve:constant(1),cycleCount:1,probability:1}];
+  data.TrailModule={enabled:true,ratio:1,lifetime:constant(1),minVertexDistance:10,dieWithParticles:false};
+  const sim=new ParticleSimulation(data,1,motionHooks(data));
+  sim.advance(.5);
+  const trail=sim.particles[0].trail;
+  assert.equal(trail.points.length,1);
+  assert.ok(trail.head.age>.49);
+  assert.ok(trail.head.position.z>.49);
+});
 test('burst probability and prewarm remain deterministic across frame partitions',()=>{
   const data=system(0);
   data.prewarm=true;

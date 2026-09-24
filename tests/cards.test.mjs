@@ -5,8 +5,8 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {runInNewContext} from 'node:vm';
 import {loadCard} from '../src/card-loader.js';
-import {sampleShape} from '../web/particle-motion.js';
-import {randomSequence} from '../web/particle-simulation.js';
+import {sampleShape,motionHooks,effectiveVelocity} from '../web/particle-motion.js';
+import {ParticleSimulation,randomSequence} from '../web/particle-simulation.js';
 
 const folder = process.env.CGSS_BUNDLE_DIR;
 const pixels = JSON.parse(fs.readFileSync(new URL('./reference-pixels.json',import.meta.url),'utf8'));
@@ -74,4 +74,73 @@ test('card 100108 sleeve stars use a spreading ConeVolume shape', {skip:!folder}
     assert.ok(Math.max(...positions.map(p=>p.z))-Math.min(...positions.map(p=>p.z))>5);
     assert.ok(Math.max(...positions.map(p=>p.x))-Math.min(...positions.map(p=>p.x))>2);
   }
+});
+
+test('card 201291 fireworks launch radially from Circle shapes', {skip:!folder}, () => {
+  const plan=loadCard(fs.readFileSync(path.join(folder,'card_cartoon_201291.unity3d'))).plan;
+  const node=plan.effectPrefabs.flatMap(prefab=>prefab.nodes)
+    .find(node=>node.name==='L_eff_circle_fireworks_1');
+  const system=node.componentIds.map(id=>plan.objects[String(id)])
+    .find(object=>object?.type==='ParticleSystem').data;
+  assert.equal(system.ShapeModule.type,10);
+  assert.equal(system.ShapeModule.radiusThickness,0.30000001192092896);
+  const random=randomSequence(201291);
+  for(let i=0;i<100;i++) {
+    const {position,direction}=sampleShape(system.ShapeModule,random);
+    assert.ok(Math.hypot(position.x,position.y)>=279);
+    assert.ok(position.x*direction.x+position.y*direction.y>0);
+    assert.equal(direction.z,0);
+  }
+});
+
+test('card 201291 rise and burst systems expose Stretch and Trail inputs', {skip:!folder}, () => {
+  const plan=loadCard(fs.readFileSync(path.join(folder,'card_cartoon_201291.unity3d'))).plan;
+  const entries=plan.effectPrefabs.flatMap(prefab=>prefab.nodes).flatMap(node=>{
+    const components=node.componentIds.map(id=>plan.objects[String(id)]).filter(Boolean);
+    const system=components.find(object=>object.type==='ParticleSystem')?.data;
+    const renderer=components.find(object=>object.type==='ParticleSystemRenderer')?.data;
+    return system && renderer ? [{name:node.name,system,renderer}] : [];
+  });
+  const stretch=entries.filter(entry=>entry.renderer.m_RenderMode===1);
+  const trails=entries.filter(entry=>entry.system.TrailModule.enabled);
+  assert.equal(stretch.length,5);
+  assert.equal(trails.length,20);
+  assert.ok(stretch.every(entry=>entry.system.InitialModule.startSpeed.scalar===0));
+  assert.ok(stretch.every(entry=>entry.system.VelocityModule.y.scalar>0));
+  assert.equal(stretch.filter(entry=>entry.renderer.m_MaxParticleSize===.5).length,2);
+  assert.ok(trails.every(entry=>entry.renderer.m_Materials.length>=2));
+  assert.ok(trails.every(entry=>entry.system.TrailModule.minVertexDistance===10));
+  const particle={seed:201291,phase:0,lifetime:5};
+  const hooks=motionHooks(stretch[0].system);hooks.initialize(particle);
+  assert.ok(effectiveVelocity(stretch[0].system,particle,1).local.y>0);
+  const launch=stretch.find(entry=>entry.name==='L_eff_circle_fireworks_8');
+  assert.equal(launch.system.EmissionModule.m_Bursts[0].time,5.5);
+  assert.equal(launch.system.InitialModule.startLifetime.scalar,5);
+  const nodes=plan.effectPrefabs.flatMap(prefab=>prefab.nodes);
+  for(const [launchName,burstName,burstTime] of [
+    ['L_eff_circle_fireworks_8','L_eff_circle_fireworks_5',10],
+    ['L2_eff_circle_fireworks_8','L2_eff_circle_fireworks_5',4.5],
+    ['R_eff_circle_fireworks_8','R_eff_circle_fireworks_7',11.1],
+    ['R2_eff_circle_fireworks_8','R2_eff_circle_fireworks_7',7.5],
+    ['R3_eff_circle_fireworks_8','R3_eff_circle_fireworks_7',6]
+  ]) {
+    const launchNode=nodes.find(node=>node.name===launchName);
+    const burstNode=nodes.find(node=>node.name===burstName);
+    const launchSystem=launchNode.componentIds.map(id=>plan.objects[String(id)])
+      .find(object=>object?.type==='ParticleSystem').data;
+    const simulation=new ParticleSimulation(launchSystem,1,motionHooks(launchSystem));
+    simulation.advance(burstTime/launchSystem.simulationSpeed);
+    const birth=launchSystem.EmissionModule.m_Bursts[0].time;
+    const rocket=simulation.particles.find(entry=>Math.abs(entry.birth-birth)<1e-6);
+    const launchPosition=plan.objects[String(launchNode.transformId)].data.m_LocalPosition;
+    const burstPosition=plan.objects[String(burstNode.transformId)].data.m_LocalPosition;
+    assert.ok(Math.hypot(
+      launchPosition.x+rocket.motion.position.x-burstPosition.x,
+      launchPosition.y+rocket.motion.position.y-burstPosition.y) < 60,
+    `${launchName} must terminate near ${burstName}`);
+  }
+  const trailParticle={seed:201291,phase:0,lifetime:4};
+  const trailHooks=motionHooks(trails[0].system);trailHooks.initialize(trailParticle);
+  trailHooks.initializeTrail(trailParticle);
+  assert.equal(trailParticle.trail.lifetime,4);
 });
