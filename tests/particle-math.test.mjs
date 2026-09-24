@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {sample, integral, particleScale, rotateShape, compareEmitters, stretchedBillboard,
-  clampBillboard, trailPointSequence, trailTextureU} from '../web/particle-math.js';
+  clampBillboard, particleMeshExtent, trailPointSequence, trailTextureU} from '../web/particle-math.js';
 
 const linear = (a,b) => ({m_Curve:[{time:0,value:a,inSlope:b-a,outSlope:b-a},{time:1,value:b,inSlope:b-a,outSlope:b-a}]});
 test('emitter ordering uses layer then signed order with stable ties',()=>{
@@ -60,6 +60,19 @@ test('screen-space particle limit clamps the whole stretched billboard',()=>{
   const quad=clampBillboard({width:1800,height:180,angle:0,offset:{x:90,y:18}},1400,.5);
   assert.deepEqual(quad,{width:700,height:70,angle:0,offset:{x:35,y:7}});
   assert.equal(clampBillboard(quad,1400,10),quad);
+});
+test('screen-space particle limit measures authored mesh geometry before clamping',()=>{
+  const mesh={vertices:[
+    {x:-.005,y:-.0015,z:-.005},{x:.005,y:.0015,z:.005}
+  ]};
+  const geometryExtent=particleMeshExtent(mesh);
+  assert.ok(Math.abs(geometryExtent-Math.hypot(.01,.003,.01))<1e-12);
+  const leaf={width:25000,height:25000,angle:0,offset:{x:0,y:0}};
+  assert.equal(clampBillboard(leaf,1400,.5,geometryExtent),leaf);
+  const oversized={width:100000,height:100000,angle:0,offset:{x:100,y:50}};
+  const clamped=clampBillboard(oversized,1400,.5,geometryExtent);
+  assert.ok(Math.abs(Math.max(clamped.width,clamped.height)*geometryExtent-700)<1e-9);
+  assert.ok(clamped.offset.x<100 && clamped.offset.y<50);
 });
 test('particle trails wait for a committed segment before attaching the live head',()=>{
   const origin={age:0,position:{x:0,y:0,z:0}};

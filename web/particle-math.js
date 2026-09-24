@@ -68,12 +68,27 @@ export function stretchedBillboard(renderer, size, velocity, rotation = 0, sizeY
     offset:{x:c*x-s*y,y:s*x+c*y}};
 }
 
-// Billboard limits are stored as a fraction of the viewport. Clamp the whole
-// stretched quad so authored launch streaks cannot grow past that screen-space
-// limit when Length Scale and Velocity Scale are combined.
-export function clampBillboard(quad, viewportSize, maximumFraction) {
+// Return a rotation-independent upper bound for authored mesh coordinates.
+// Unity scales Mesh particles by their particle size after applying the mesh,
+// so small normalized geometry must be included in any screen-space limit.
+export function particleMeshExtent(mesh) {
+  const vertices=mesh?.vertices || [];
+  if (!vertices.length) return 1;
+  let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+  for (const vertex of vertices) {
+    minX=Math.min(minX,vertex.x); maxX=Math.max(maxX,vertex.x);
+    minY=Math.min(minY,vertex.y); maxY=Math.max(maxY,vertex.y);
+    minZ=Math.min(minZ,vertex.z); maxZ=Math.max(maxZ,vertex.z);
+  }
+  return Math.hypot(maxX-minX,maxY-minY,maxZ-minZ) || 1;
+}
+
+// Particle limits are stored as a fraction of the viewport. Clamp the final
+// projected extent, including authored Mesh geometry, so normalized meshes do
+// not get treated as unit billboards and shrunk a second time.
+export function clampBillboard(quad, viewportSize, maximumFraction, geometryExtent = 1) {
   const maximum=viewportSize*maximumFraction;
-  const extent=Math.max(quad.width,quad.height);
+  const extent=Math.max(quad.width,quad.height)*geometryExtent;
   if (!(maximum>0) || !(extent>maximum)) return quad;
   const factor=maximum/extent;
   return {...quad,width:quad.width*factor,height:quad.height*factor,

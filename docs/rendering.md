@@ -160,8 +160,11 @@ tails aligned with their vertical motion instead of leaving a wide horizontal
 quad. We map texture U=0 to the motion-facing end for this render mode. The
 bright launch head therefore rises above the fading exhaust instead of pulling
 the exhaust ahead of it. We also enforce the renderer's screen-space
-`m_MaxParticleSize` limit after stretching. This prevents long launch textures
-from becoming full-height lines while keeping the authored launch geometry.
+`m_MaxParticleSize` limit after stretching. For Mesh particles, we measure the
+authored mesh bounds before applying that limit. This prevents normalized mesh
+coordinates from shrinking a second time while still limiting their final
+projected size. It also prevents long launch textures from becoming full-height
+lines while keeping the authored launch geometry.
 We anchor the motion-facing edge of a Stretch Billboard at the simulated
 particle position and extend the remaining quad backwards. This lets launch
 tails emerge progressively from their authored origin, prevents the visible

@@ -62,7 +62,7 @@ window.CGSSParticleOverlay = (function () {
       transforms, trailVisual, mesh};
   }
   async function create({plan, config}) {
-    const {sample, integral, particleScale, stretchedBillboard, clampBillboard,
+    const {sample, integral, particleScale, stretchedBillboard, clampBillboard, particleMeshExtent,
       trailPointSequence, trailTextureU} = await import('./particle-math.js');
     const {ParticleSimulation, noiseEffects} = await import('./particle-simulation.js');
     const {motionHooks, transformPoint, transformVector, effectiveVelocity} = await import('./particle-motion.js');
@@ -74,7 +74,10 @@ window.CGSSParticleOverlay = (function () {
     const nodes = plan.effectPrefabs.flatMap((prefab) => prefab.nodes);
     const emitters = nodes.flatMap((node, serial) => node.componentIds.filter((id) => object(plan, id).type === 'ParticleSystem').map((id) => makeEmitter(plan, config, node, id, serial, resolveParticleMaterial))).filter(Boolean);
     // Preserve discovery order here. Cross-object ordering belongs to the render plan.
-    for (const emitter of emitters) emitter.simulation = new ParticleSimulation(emitter.system, crypto.getRandomValues(new Uint32Array(1))[0], motionHooks(emitter.system));
+    for (const emitter of emitters) {
+      emitter.simulation = new ParticleSimulation(emitter.system, crypto.getRandomValues(new Uint32Array(1))[0], motionHooks(emitter.system));
+      emitter.meshExtent = emitter.mesh ? particleMeshExtent(emitter.mesh) : 1;
+    }
     // The bundle stores a multiplier, not Physics.gravity. Callers may override it.
     const gravity = config.gravity || {x:0,y:-9.81};
     const imageByTexture = new Map();
@@ -225,7 +228,7 @@ window.CGSSParticleOverlay = (function () {
             y:localVelocity.y+velocity.world.y
           }, rotation.z, height);
           const quad=clampBillboard(authoredQuad,config.viewportWorld,
-            emitter.renderer.m_MaxParticleSize);
+            emitter.renderer.m_MaxParticleSize,emitter.meshExtent);
           const sprite = {x:point.x+quad.offset.x, y:-(point.y+quad.offset.y), width:quad.width, height:quad.height, angle:-quad.angle,
             region, color, flipX:emitter.renderer.m_RenderMode===1,
             gain:emitter.gain, blendSrc:emitter.blendSrc, blendDst:emitter.blendDst,

@@ -7,6 +7,7 @@ import {runInNewContext} from 'node:vm';
 import {loadCard} from '../src/card-loader.js';
 import {sampleShape,motionHooks,effectiveVelocity} from '../web/particle-motion.js';
 import {ParticleSimulation,randomSequence} from '../web/particle-simulation.js';
+import {particleMeshExtent} from '../web/particle-math.js';
 
 const folder = process.env.CGSS_BUNDLE_DIR;
 const pixels = JSON.parse(fs.readFileSync(new URL('./reference-pixels.json',import.meta.url),'utf8'));
@@ -73,6 +74,21 @@ test('card 100108 sleeve stars use a spreading ConeVolume shape', {skip:!folder}
     const positions=Array.from({length:300},()=>sampleShape(system.ShapeModule,random).position);
     assert.ok(Math.max(...positions.map(p=>p.z))-Math.min(...positions.map(p=>p.z))>5);
     assert.ok(Math.max(...positions.map(p=>p.x))-Math.min(...positions.map(p=>p.x))>2);
+  }
+});
+
+test('cards 100107 and 100108 preserve normalized maple-leaf mesh scale', {skip:!folder}, () => {
+  for (const id of ['100107','100108']) {
+    const plan=loadCard(fs.readFileSync(path.join(folder,`card_cartoon_${id}.unity3d`))).plan;
+    const leaves=plan.effectPrefabs.flatMap(prefab=>prefab.nodes).flatMap(node=>{
+      if (!node.name.startsWith('leaf_')) return [];
+      const renderer=node.componentIds.map(componentId=>plan.objects[String(componentId)])
+        .find(object=>object?.type==='ParticleSystemRenderer')?.data;
+      const mesh=plan.objects[String(renderer?.m_Mesh?.m_PathID)]?.data?.particleMesh;
+      return renderer?.m_RenderMode===4 && mesh ? [{renderer,mesh}] : [];
+    });
+    assert.ok(leaves.length>=4);
+    assert.ok(leaves.every(({mesh})=>particleMeshExtent(mesh)<.02));
   }
 });
 

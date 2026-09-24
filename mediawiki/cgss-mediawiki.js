@@ -9002,7 +9002,7 @@ window.CGSSParticleOverlay = (function () {
       transforms, trailVisual, mesh};
   }
   async function create({plan, config}) {
-    const {sample, integral, particleScale, stretchedBillboard, clampBillboard,
+    const {sample, integral, particleScale, stretchedBillboard, clampBillboard, particleMeshExtent,
       trailPointSequence, trailTextureU} = await Promise.resolve(__require("web/particle-math.js"));
     const {ParticleSimulation, noiseEffects} = await Promise.resolve(__require("web/particle-simulation.js"));
     const {motionHooks, transformPoint, transformVector, effectiveVelocity} = await Promise.resolve(__require("web/particle-motion.js"));
@@ -9014,7 +9014,10 @@ window.CGSSParticleOverlay = (function () {
     const nodes = plan.effectPrefabs.flatMap((prefab) => prefab.nodes);
     const emitters = nodes.flatMap((node, serial) => node.componentIds.filter((id) => object(plan, id).type === 'ParticleSystem').map((id) => makeEmitter(plan, config, node, id, serial, resolveParticleMaterial))).filter(Boolean);
     // Preserve discovery order here. Cross-object ordering belongs to the render plan.
-    for (const emitter of emitters) emitter.simulation = new ParticleSimulation(emitter.system, crypto.getRandomValues(new Uint32Array(1))[0], motionHooks(emitter.system));
+    for (const emitter of emitters) {
+      emitter.simulation = new ParticleSimulation(emitter.system, crypto.getRandomValues(new Uint32Array(1))[0], motionHooks(emitter.system));
+      emitter.meshExtent = emitter.mesh ? particleMeshExtent(emitter.mesh) : 1;
+    }
     // The bundle stores a multiplier, not Physics.gravity. Callers may override it.
     const gravity = config.gravity || {x:0,y:-9.81};
     const imageByTexture = new Map();
@@ -9165,7 +9168,7 @@ window.CGSSParticleOverlay = (function () {
             y:localVelocity.y+velocity.world.y
           }, rotation.z, height);
           const quad=clampBillboard(authoredQuad,config.viewportWorld,
-            emitter.renderer.m_MaxParticleSize);
+            emitter.renderer.m_MaxParticleSize,emitter.meshExtent);
           const sprite = {x:point.x+quad.offset.x, y:-(point.y+quad.offset.y), width:quad.width, height:quad.height, angle:-quad.angle,
             region, color, flipX:emitter.renderer.m_RenderMode===1,
             gain:emitter.gain, blendSrc:emitter.blendSrc, blendDst:emitter.blendDst,
@@ -9257,12 +9260,27 @@ function stretchedBillboard(renderer, size, velocity, rotation = 0, sizeY = size
     offset:{x:c*x-s*y,y:s*x+c*y}};
 }
 
-// Billboard limits are stored as a fraction of the viewport. Clamp the whole
-// stretched quad so authored launch streaks cannot grow past that screen-space
-// limit when Length Scale and Velocity Scale are combined.
-function clampBillboard(quad, viewportSize, maximumFraction) {
+// Return a rotation-independent upper bound for authored mesh coordinates.
+// Unity scales Mesh particles by their particle size after applying the mesh,
+// so small normalized geometry must be included in any screen-space limit.
+function particleMeshExtent(mesh) {
+  const vertices=mesh?.vertices || [];
+  if (!vertices.length) return 1;
+  let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+  for (const vertex of vertices) {
+    minX=Math.min(minX,vertex.x); maxX=Math.max(maxX,vertex.x);
+    minY=Math.min(minY,vertex.y); maxY=Math.max(maxY,vertex.y);
+    minZ=Math.min(minZ,vertex.z); maxZ=Math.max(maxZ,vertex.z);
+  }
+  return Math.hypot(maxX-minX,maxY-minY,maxZ-minZ) || 1;
+}
+
+// Particle limits are stored as a fraction of the viewport. Clamp the final
+// projected extent, including authored Mesh geometry, so normalized meshes do
+// not get treated as unit billboards and shrunk a second time.
+function clampBillboard(quad, viewportSize, maximumFraction, geometryExtent = 1) {
   const maximum=viewportSize*maximumFraction;
-  const extent=Math.max(quad.width,quad.height);
+  const extent=Math.max(quad.width,quad.height)*geometryExtent;
   if (!(maximum>0) || !(extent>maximum)) return quad;
   const factor=maximum/extent;
   return {...quad,width:quad.width*factor,height:quad.height*factor,
@@ -9308,6 +9326,7 @@ exports.sample = sample;
 exports.integral = integral;
 exports.particleScale = particleScale;
 exports.stretchedBillboard = stretchedBillboard;
+exports.particleMeshExtent = particleMeshExtent;
 exports.clampBillboard = clampBillboard;
 exports.trailPointSequence = trailPointSequence;
 exports.trailTextureU = trailTextureU;
